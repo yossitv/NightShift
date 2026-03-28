@@ -70,6 +70,7 @@ export async function POST() {
       repo: name,
       number: issue.number,
       title: issue.title,
+      body: issue.body ?? null,
       url: issue.html_url,
     },
     summary,

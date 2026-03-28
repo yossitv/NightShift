@@ -88,6 +88,7 @@ export async function runMission(missionId: string) {
           {
             issueNumber: mission.issue.number,
             issueTitle: mission.issue.title,
+            issueBody: mission.issue.body ?? null,
             summary: mission.summary,
             acceptanceCriteria: mission.acceptanceCriteria,
           },

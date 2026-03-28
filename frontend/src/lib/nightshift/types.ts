@@ -54,6 +54,7 @@ export interface MissionIssueRef {
   repo: string;
   number: number;
   title: string;
+  body?: string | null;
   url?: string | null;
 }
 
@@ -219,6 +220,7 @@ export function normalizeMission(value: unknown): Mission {
       repo: asString(issue.repo),
       number: asNumber(issue.number),
       title: asString(issue.title),
+      body: asNullableString(issue.body),
       url: asNullableString(issue.url),
     },
     selection: {

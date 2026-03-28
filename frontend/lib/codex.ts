@@ -18,6 +18,7 @@ export async function runCodex(
   mission: {
     issueNumber: number;
     issueTitle: string;
+    issueBody?: string | null;
     summary: string;
     acceptanceCriteria: string[];
   },
@@ -97,6 +98,7 @@ function buildPrompt(
   mission: {
     issueNumber: number;
     issueTitle: string;
+    issueBody?: string | null;
     summary: string;
     acceptanceCriteria: string[];
   },
@@ -106,7 +108,7 @@ function buildPrompt(
 
 ## Mission Summary
 ${mission.summary}
-
+${mission.issueBody ? `\n## Full Issue Description\n${mission.issueBody}\n` : ""}
 ## Acceptance Criteria
 ${mission.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join("\n")}
 

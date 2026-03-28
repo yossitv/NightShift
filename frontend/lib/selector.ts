@@ -88,13 +88,11 @@ export function selectIssue(issues: GitHubIssue[]): SelectionResult | null {
   const body = best.body ?? "";
 
   // Generate mission draft
-  const summary = `Implement: ${best.title}. ${body.slice(0, 200)}${body.length > 200 ? "…" : ""}`;
+  const summary = `Implement: ${best.title}. ${body.slice(0, 300)}${body.length > 300 ? "…" : ""}`;
 
-  const acceptanceCriteria = [
-    `Issue #${best.number} requirements are satisfied`,
-    "All existing tests continue to pass",
-    "New functionality has appropriate test coverage",
-  ];
+  // Extract acceptance criteria from issue body if available
+  const acceptanceCriteria = extractCriteria(body, best.number);
+
 
   const nonGoals = [
     "Do not expand scope beyond the issue description",
@@ -115,4 +113,40 @@ export function selectIssue(issues: GitHubIssue[]): SelectionResult | null {
     nonGoals,
     riskNote: note,
   };
+}
+
+/**
+ * Extract acceptance criteria from issue body.
+ * Looks for bullet lists under "Acceptance Criteria" headers, or any "- " items.
+ * Falls back to generic criteria if nothing found.
+ */
+function extractCriteria(body: string, issueNumber: number): string[] {
+  if (!body) {
+    return [
+      `Issue #${issueNumber} requirements are satisfied`,
+      "All existing tests continue to pass",
+    ];
+  }
+
+  // Look for section after "Acceptance Criteria" header
+  const acMatch = body.match(/#+\s*Acceptance\s*Criteria\s*\n([\s\S]*?)(?=\n#|\n##|$)/i);
+  const section = acMatch ? acMatch[1] : body;
+
+  // Extract bullet items (- or * prefixed lines)
+  const bullets = section
+    .split("\n")
+    .map((line) => line.replace(/^[\s]*[-*]\s*/, "").trim())
+    .filter((line) => line.length > 5 && line.length < 200 && !line.startsWith("#"));
+
+  if (bullets.length >= 2) {
+    // Add standard checks to extracted criteria
+    return [...bullets.slice(0, 8), "All existing tests continue to pass"];
+  }
+
+  // Fallback
+  return [
+    `Issue #${issueNumber} requirements are satisfied`,
+    "All existing tests continue to pass",
+    "New functionality has appropriate test coverage",
+  ];
 }

@@ -8,6 +8,11 @@ import { REPO_CONFIG } from "./config";
 
 const REPOS_DIR = join(process.cwd(), ".data", "repos");
 
+function sanitize(text: string): string {
+  // §21: Do not store secrets in logs or status views
+  return text.replace(/x-access-token:[^@]+@/g, "x-access-token:***@");
+}
+
 function run(cmd: string, cwd?: string): string {
   try {
     return execSync(cmd, {
@@ -18,7 +23,7 @@ function run(cmd: string, cwd?: string): string {
     }).trim();
   } catch (err: unknown) {
     const e = err as { stderr?: string; message?: string };
-    throw new Error(`git command failed: ${cmd}\n${e.stderr ?? e.message}`);
+    throw new Error(sanitize(`git command failed: ${cmd}\n${e.stderr ?? e.message}`));
   }
 }
 
