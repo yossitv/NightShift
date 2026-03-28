@@ -9,3 +9,7 @@
 !.codex/prompts/**
 !.codex/skills/
 !.codex/skills/**
+
+.env
+.data/
+frontend/.data/

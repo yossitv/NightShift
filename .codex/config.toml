@@ -3,6 +3,8 @@ notify = ["node", "/Users/ys/.nvm/versions/node/v24.14.0/lib/node_modules/oh-my-
 model_reasoning_effort = "high"
 developer_instructions = "You have oh-my-codex installed. AGENTS.md is your orchestration brain and the main orchestration surface. Use /prompts:<role> and spawned role prompts for specialized subagent work. Codex native subagents are available via .codex/agents and may be used for independent parallel subtasks within a single session or team pane. Skills are loaded from installed SKILL.md files under .codex/skills, not from native agent TOMLs. Use workflow skills via $name when explicitly invoked or clearly routed by AGENTS.md. Treat role prompts as narrower execution surfaces under AGENTS.md authority."
 
+
+
 model = "gpt-5.4"
 model_context_window = 1000000
 model_auto_compact_token_limit = 900000
@@ -57,17 +59,5 @@ command = "node"
 args = ["/Users/ys/.nvm/versions/node/v24.14.0/lib/node_modules/oh-my-codex/dist/mcp/team-server.js"]
 enabled = true
 startup_timeout_sec = 5
-
-[projects."/Users/ys/Documents/GitHub/NightShift"]
-trust_level = "trusted"
-
-[plugins."google-calendar@openai-curated"]
-enabled = true
-
-[plugins."github@openai-curated"]
-enabled = true
-
-[plugins."google-drive@openai-curated"]
-enabled = true
 # ============================================================
 # End oh-my-codex
