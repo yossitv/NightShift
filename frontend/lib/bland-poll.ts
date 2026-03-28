@@ -8,6 +8,7 @@ import {
   appendMissionEvent,
 } from "@/src/lib/nightshift/store";
 import { runMission } from "./runner-core";
+import { closeIssue } from "./git";
 
 /**
  * Poll a Bland AI call until it completes, then update mission state.
@@ -72,9 +73,18 @@ export async function pollBlandCall(callId: string, missionId: string) {
           actor: "approval_adapter",
           type: "approval_resolved",
           state: "declined",
-          message: `Declined via voice call (${data.call_length}s).`,
+          message: `Declined via voice call (${data.call_length}s). Closing issue.`,
           metadata: { callId, transcript: transcript.slice(0, 200) },
         });
+
+        // Close the GitHub issue
+        const m = await getMission(missionId);
+        if (m) {
+          await closeIssue(
+            m.issue.number,
+            `**Night Shift — Mission Declined**\n\nThis issue was declined via voice approval.\n\n> ${transcript.slice(0, 300)}\n\n_Closed automatically by Night Shift._`
+          ).catch((err) => console.error("Failed to close issue:", err));
+        }
       } else {
         await appendMissionEvent(missionId, {
           actor: "approval_adapter",

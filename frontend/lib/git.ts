@@ -151,6 +151,34 @@ export async function createPullRequest(opts: {
 }
 
 /**
+ * Close a GitHub issue with a comment.
+ */
+export async function closeIssue(issueNumber: number, comment: string): Promise<void> {
+  const { owner, name, githubToken } = REPO_CONFIG;
+  if (!githubToken) return;
+
+  const headers = {
+    Accept: "application/vnd.github+json",
+    Authorization: `Bearer ${githubToken}`,
+    "Content-Type": "application/json",
+  };
+
+  // Add comment
+  await fetch(`https://api.github.com/repos/${owner}/${name}/issues/${issueNumber}/comments`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({ body: comment }),
+  });
+
+  // Close issue
+  await fetch(`https://api.github.com/repos/${owner}/${name}/issues/${issueNumber}`, {
+    method: "PATCH",
+    headers,
+    body: JSON.stringify({ state: "closed", state_reason: "not_planned" }),
+  });
+}
+
+/**
  * Get a summary of the diff on the current branch vs origin/main.
  */
 export function getDiffSummary(): string {

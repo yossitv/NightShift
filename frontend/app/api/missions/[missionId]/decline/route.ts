@@ -1,6 +1,7 @@
 // POST /api/missions/:missionId/decline — Decline mission (SPEC.md §19)
 
 import { getMission, updateMissionState } from "@/src/lib/nightshift/store";
+import { closeIssue } from "@/lib/git";
 
 export const dynamic = "force-dynamic";
 
@@ -23,8 +24,14 @@ export async function POST(
   const updated = await updateMissionState(
     missionId,
     "declined",
-    "Mission declined."
+    "Mission declined. Issue closed."
   );
+
+  // Close the GitHub issue
+  closeIssue(
+    mission.issue.number,
+    `**Night Shift — Mission Declined**\n\nThis issue was declined by the operator.\n\n_Closed automatically by Night Shift._`
+  ).catch((err) => console.error("Failed to close issue:", err));
 
   return Response.json({ mission: updated });
 }
