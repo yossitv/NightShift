@@ -32,8 +32,7 @@ export async function GET(
     // Use branch ref directly — no checkout needed
     const run = (cmd: string) => execSync(cmd, { cwd: repoPath, encoding: "utf-8", timeout: 10000 }).trim();
 
-    run("git fetch origin 2>/dev/null || true");
-
+    // Skip git fetch on every request — runner already fetches when needed
     let stat = "";
     try { stat = run(`git diff --stat origin/main...${branchName}`); } catch { /* */ }
 

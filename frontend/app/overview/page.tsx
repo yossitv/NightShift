@@ -62,16 +62,25 @@ function fmt(v: string | null) {
   return new Intl.DateTimeFormat("en-US", { dateStyle: "short", timeStyle: "medium" }).format(new Date(v));
 }
 
+const REPO_PATH = join(process.cwd(), ".data", "repos", `${REPO_CONFIG.owner}_${REPO_CONFIG.name}`);
+let _fetched = false;
+
+function ensureFetched() {
+  if (_fetched) return;
+  if (!existsSync(join(REPO_PATH, ".git"))) return;
+  try { execSync("git fetch origin 2>/dev/null || true", { cwd: REPO_PATH, timeout: 10000 }); } catch { /* */ }
+  _fetched = true;
+}
+
 function getDiffForBranch(branchName: string | null): { stat: string; diff: string; commits: string } | null {
   if (!branchName) return null;
-  const repoPath = join(process.cwd(), ".data", "repos", `${REPO_CONFIG.owner}_${REPO_CONFIG.name}`);
-  if (!existsSync(join(repoPath, ".git"))) return null;
+  if (!existsSync(join(REPO_PATH, ".git"))) return null;
+  // No fetch here — called once in ensureFetched
   try {
-    // Fetch to ensure we have the branch refs, but don't checkout (avoids race conditions)
-    execSync("git fetch origin 2>/dev/null || true", { cwd: repoPath, timeout: 10000 });
-    const stat = execSync(`git diff --stat origin/main...${branchName} 2>/dev/null || echo ''`, { cwd: repoPath, encoding: "utf-8", timeout: 5000 }).trim();
-    const diff = execSync(`git diff origin/main...${branchName} 2>/dev/null || echo ''`, { cwd: repoPath, encoding: "utf-8", timeout: 5000 }).trim();
-    const commits = execSync(`git log --oneline origin/main...${branchName} 2>/dev/null || echo ''`, { cwd: repoPath, encoding: "utf-8", timeout: 5000 }).trim();
+    const run = (cmd: string) => execSync(cmd, { cwd: REPO_PATH, encoding: "utf-8", timeout: 5000 }).trim();
+    const stat = run(`git diff --stat origin/main...${branchName} 2>/dev/null || echo ''`);
+    const diff = run(`git diff origin/main...${branchName} 2>/dev/null || echo ''`);
+    const commits = run(`git log --oneline origin/main...${branchName} 2>/dev/null || echo ''`);
     if (stat || diff) return { stat, diff: diff.slice(0, 15000), commits };
   } catch { /* ignore */ }
   return null;
@@ -112,7 +121,8 @@ export default async function OverviewPage() {
   const declined = missions.filter((m) => m.state === "declined").length;
   const codexReady = isCodexAvailable();
 
-  // Preload diffs for missions that have branches
+  // Preload diffs (one git fetch, then local diff per branch)
+  ensureFetched();
   const diffMap = new Map<string, { stat: string; diff: string; commits: string }>();
   for (const m of missions) {
     if (m.branch.name) {

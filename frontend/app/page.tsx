@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { listMissionEvents, listMissions } from "@/src/lib/nightshift/store";
-import { MissionActions, AutoRefresh, IssueSelectButton } from "./components/MissionActions";
-import { REPO_CONFIG } from "@/lib/config";
+import { MissionActions, AutoRefresh, LiveIssueList } from "./components/MissionActions";
 
 export const dynamic = "force-dynamic";
 
@@ -103,76 +102,15 @@ function PipelineBar({ current }: { current: string }) {
 /* ── Page ───────────────────────────────────────────────────── */
 
 export default async function Home() {
-  const missions = await listMissions();
-  const mission = missions[0] ?? null;
-  const events = mission ? (await listMissionEvents(mission.id)).slice(0, 8) : [];
-
-  if (!mission) {
-    // Fetch issues for the landing page
-    let issues: Array<{ number: number; title: string; labels: Array<{ name: string }>; body?: string | null }> = [];
-    try {
-      const headers: Record<string, string> = { Accept: "application/vnd.github+json" };
-      if (REPO_CONFIG.githubToken) headers.Authorization = `Bearer ${REPO_CONFIG.githubToken}`;
-      const res = await fetch(
-        `https://api.github.com/repos/${REPO_CONFIG.owner}/${REPO_CONFIG.name}/issues?state=open&per_page=20&sort=updated&direction=desc`,
-        { headers, cache: "no-store" }
-      );
-      if (res.ok) {
-        const raw = await res.json() as Array<Record<string, unknown>>;
-        issues = raw.filter((i) => !i.pull_request) as typeof issues;
-      }
-    } catch { /* ignore */ }
-
-    return (
-      <main className="min-h-screen px-3 py-3 sm:px-4">
-        <div className="mx-auto max-w-[900px] space-y-6 py-12">
-          <div className="text-center">
-            <div className="mb-4 inline-flex items-center gap-3 rounded-full border border-[#634BFF]/25 bg-[#634BFF]/6 px-5 py-2.5">
-              <span className="h-2.5 w-2.5 rounded-full bg-[#634BFF]" />
-              <span className="font-mono text-[0.72rem] uppercase tracking-[0.38em] text-[#8B7CFF]">Night Shift</span>
-            </div>
-            <h1 className="mt-4 font-display text-4xl font-bold">Mission Control</h1>
-            <p className="mt-3 text-base leading-7 text-white/60">
-              Select an issue to start an autonomous mission. Auto-select picks the best candidate, or choose one directly.
-            </p>
-            <div className="mt-6">
-              <MissionActions missionId={null} state={null} />
-            </div>
-          </div>
-
-          {issues.length > 0 && (
-            <Panel>
-              <SectionHeader eyebrow={`${REPO_CONFIG.owner}/${REPO_CONFIG.name}`} title="Open Issues" right={<span className="font-mono text-xs text-slate-500">{issues.length} issues</span>} />
-              <div className="space-y-px">
-                {issues.map((issue) => (
-                  <div key={issue.number} className="flex items-center justify-between gap-4 border-b border-white/6 px-5 py-4 last:border-b-0 sm:px-6">
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono text-xs text-slate-500">#{issue.number}</span>
-                        <span className="text-sm font-medium text-white">{issue.title}</span>
-                      </div>
-                      {issue.labels?.length > 0 && (
-                        <div className="mt-1 flex gap-1">
-                          {issue.labels.map((l) => (
-                            <Pill key={l.name} tone="gray">{l.name}</Pill>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <IssueSelectButton issueNumber={issue.number} />
-                  </div>
-                ))}
-              </div>
-            </Panel>
-          )}
-        </div>
-      </main>
-    );
-  }
+  const allMissions = await listMissions();
+  const activeStates = ["candidate_selected", "awaiting_approval", "queued", "planning", "coding", "testing", "retrying"];
+  const activeMission = allMissions.find((m) => activeStates.includes(m.state)) ?? null;
+  const recentMissions = allMissions.slice(0, 10);
+  const activeEvents = activeMission ? (await listMissionEvents(activeMission.id)).slice(0, 8) : [];
 
   return (
     <main className="min-h-screen px-3 py-3 sm:px-4">
-      <AutoRefresh interval={3000} />
+      <AutoRefresh interval={5000} />
 
       <div className="mx-auto max-w-[1400px] space-y-4">
         {/* ── Header bar ── */}
@@ -180,9 +118,11 @@ export default async function Home() {
           <div className="font-display text-xl font-black uppercase tracking-[-0.03em] text-[#634BFF]">
             Night Shift
           </div>
-          <div className="hidden items-center gap-4 md:flex">
-            <PipelineBar current={mission.state} />
-          </div>
+          {activeMission && (
+            <div className="hidden items-center gap-4 md:flex">
+              <PipelineBar current={activeMission.state} />
+            </div>
+          )}
           <div className="flex items-center gap-3">
             <Link
               href="/overview"
@@ -190,137 +130,138 @@ export default async function Home() {
             >
               Overview
             </Link>
-            <Pill tone={stateTone(mission.state)}>{mission.state.replaceAll("_", " ")}</Pill>
-            <Pill tone={mission.riskLevel === "high" ? "red" : "green"}>{mission.riskLevel} risk</Pill>
+            {activeMission && (
+              <>
+                <Pill tone={stateTone(activeMission.state)}>{activeMission.state.replaceAll("_", " ")}</Pill>
+                <Pill tone={activeMission.riskLevel === "high" ? "red" : "green"}>{activeMission.riskLevel} risk</Pill>
+              </>
+            )}
           </div>
         </div>
 
-        {/* ── Hero section ── */}
-        <Panel>
-          <div className="px-6 py-6 sm:px-8 sm:py-8">
-            <div className="flex flex-wrap items-start justify-between gap-4">
-              <div className="space-y-3">
-                <p className="font-mono text-[0.72rem] uppercase tracking-[0.34em] text-white/42">
-                  #{mission.issue.number} · {mission.issue.owner}/{mission.issue.repo}
-                </p>
-                <h1 className="font-display text-3xl font-bold tracking-[-0.04em] text-white sm:text-5xl">
-                  {mission.issue.title}
-                </h1>
-                <p className="max-w-3xl text-base leading-7 text-white/60">{mission.summary}</p>
-              </div>
-              <Link
-                href={`/missions/${mission.id}`}
-                className="rounded-full border border-white/12 px-4 py-2 font-mono text-[0.72rem] uppercase tracking-[0.2em] text-white/70 transition hover:border-white/24 hover:text-white"
-              >
-                Detail View
-              </Link>
-            </div>
-
-            <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <Metric label="Mission ID" value={mission.id} />
-              <Metric label="Approval" value={mission.approval.status.replaceAll("_", " ")} />
-              <Metric label="Retry count" value={String(mission.retryCount)} />
-              <Metric label="Updated" value={fmt(mission.updatedAt)} />
-            </div>
-
-            <div className="mt-6">
-              <MissionActions missionId={mission.id} state={mission.state} />
-            </div>
-          </div>
-        </Panel>
-
-        {/* ── Content grid ── */}
-        <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+        {/* ── Two-column layout ── */}
+        <div className="grid gap-4 xl:grid-cols-[1fr_1fr]">
+          {/* ── Left: Live Issues ── */}
           <div className="space-y-4">
-            {/* Selection rationale */}
-            <Panel>
-              <SectionHeader eyebrow="issue selection" title="Selection rationale" />
-              <div className="grid gap-3 p-5 sm:grid-cols-3 sm:p-6">
-                <Metric label="Why selected" value={mission.selection.rationale} />
-                <Metric label="Why now" value={mission.selection.whyNow} />
-                <Metric label="Risk note" value={mission.selection.riskNote} />
-              </div>
-            </Panel>
+            <LiveIssueList interval={5000} />
+          </div>
 
-            {/* Acceptance criteria */}
-            <Panel>
-              <SectionHeader eyebrow="mission scope" title="Acceptance criteria" />
-              <div className="space-y-2 p-5 sm:p-6">
-                {mission.acceptanceCriteria.map((item) => (
-                  <div key={item} className="flex gap-3">
-                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
-                    <p className="text-sm leading-7 text-white/65">{item}</p>
+          {/* ── Right: Mission Status ── */}
+          <div className="space-y-4">
+            {/* Active mission */}
+            {activeMission ? (
+              <>
+                <Panel>
+                  <SectionHeader
+                    eyebrow="active mission"
+                    title={activeMission.issue.title}
+                    right={
+                      <Link
+                        href={`/missions/${activeMission.id}`}
+                        className="rounded-full border border-white/12 px-3 py-1.5 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-white/50 transition hover:text-white"
+                      >
+                        Detail
+                      </Link>
+                    }
+                  />
+                  <div className="px-5 py-5 sm:px-6 space-y-4">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-xs text-slate-500">#{activeMission.issue.number}</span>
+                      <Pill tone={stateTone(activeMission.state)}>{activeMission.state.replaceAll("_", " ")}</Pill>
+                      <Pill tone={activeMission.riskLevel === "high" ? "red" : "green"}>{activeMission.riskLevel} risk</Pill>
+                      <Pill tone="gray">{activeMission.approval.status.replaceAll("_", " ")}</Pill>
+                    </div>
+                    <p className="text-sm leading-6 text-white/60">{activeMission.summary.slice(0, 200)}</p>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <Metric label="Mission ID" value={activeMission.id} />
+                      <Metric label="Updated" value={fmt(activeMission.updatedAt)} />
+                      <Metric label="Branch" value={activeMission.branch.name ?? "—"} />
+                      <Metric label="Retries" value={`${activeMission.retryCount} / ${activeMission.maxRetries}`} />
+                      {activeMission.branch.pullRequestUrl && (
+                        <Metric label="PR" value={activeMission.branch.pullRequestUrl} />
+                      )}
+                      {activeMission.lastError && (
+                        <Metric label="Last error" value={activeMission.lastError} />
+                      )}
+                    </div>
+
+                    {/* Checks */}
+                    {activeMission.checks.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="font-mono text-[0.68rem] uppercase tracking-[0.28em] text-slate-500">
+                          Checks {activeMission.checks.filter((c) => c.status === "passed").length}/{activeMission.checks.length}
+                        </p>
+                        <div className="flex gap-2 flex-wrap">
+                          {activeMission.checks.map((check) => (
+                            <Pill key={check.id} tone={check.status === "passed" ? "green" : check.status === "failed" ? "red" : "gray"}>
+                              {check.label}: {check.status}
+                            </Pill>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <MissionActions missionId={activeMission.id} state={activeMission.state} />
                   </div>
-                ))}
-                {mission.nonGoals.length > 0 && (
-                  <>
-                    <p className="mt-4 font-mono text-[0.68rem] uppercase tracking-[0.28em] text-slate-500">Non-goals</p>
-                    <div className="mt-2 flex flex-wrap gap-2">
-                      {mission.nonGoals.map((item) => (
-                        <Pill key={item} tone="gray">{item}</Pill>
+                </Panel>
+
+                {/* Event log */}
+                {activeEvents.length > 0 && (
+                  <Panel>
+                    <SectionHeader eyebrow="mission log" title="Events" right={<span className="font-mono text-xs text-slate-500">{activeEvents.length}</span>} />
+                    <div className="space-y-px max-h-[400px] overflow-y-auto">
+                      {activeEvents.map((event) => (
+                        <div key={event.id} className="flex items-start gap-3 border-b border-white/6 px-5 py-3 last:border-b-0 sm:px-6">
+                          <Pill tone={stateTone(event.state)}>{event.state.replaceAll("_", " ")}</Pill>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm text-white/80">{event.message}</p>
+                            <p className="mt-1 font-mono text-[0.6rem] text-slate-600">
+                              {fmt(event.createdAt)} · {event.actor.replaceAll("_", " ")}
+                            </p>
+                          </div>
+                        </div>
                       ))}
                     </div>
-                  </>
+                  </Panel>
                 )}
-              </div>
-            </Panel>
-
-            {/* Event log */}
-            <Panel>
-              <SectionHeader eyebrow="mission log" title="Recent events" right={<span className="font-mono text-xs text-slate-500">{events.length} events</span>} />
-              <div className="space-y-px">
-                {events.map((event) => (
-                  <div key={event.id} className="flex items-start gap-4 border-b border-white/6 px-5 py-4 last:border-b-0 sm:px-6">
-                    <Pill tone={stateTone(event.state)}>{event.state.replaceAll("_", " ")}</Pill>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm text-white/80">{event.message}</p>
-                      <p className="mt-1 font-mono text-[0.65rem] text-slate-500">
-                        {fmt(event.createdAt)} · {event.actor.replaceAll("_", " ")} · {event.type.replaceAll("_", " ")}
-                      </p>
-                    </div>
+              </>
+            ) : (
+              <Panel>
+                <div className="px-6 py-8 text-center">
+                  <p className="font-mono text-[0.72rem] uppercase tracking-[0.34em] text-white/30">No active mission</p>
+                  <p className="mt-2 text-sm text-white/50">Watcher is monitoring for new issues every 30s.</p>
+                  <div className="mt-4">
+                    <MissionActions missionId={null} state={null} />
                   </div>
-                ))}
-              </div>
-            </Panel>
-          </div>
+                </div>
+              </Panel>
+            )}
 
-          <div className="space-y-4">
-            {/* Approval & branch */}
-            <Panel>
-              <SectionHeader eyebrow="approval gate" title="Approval & branch" />
-              <div className="grid gap-3 p-5 sm:p-6">
-                <Metric label="Approval status" value={mission.approval.status.replaceAll("_", " ")} />
-                <Metric label="Channel" value={mission.approval.channel} />
-                <Metric label="Requested" value={fmt(mission.approval.requestedAt)} />
-                <Metric label="Resolved" value={fmt(mission.approval.resolvedAt)} />
-                <Metric label="Branch" value={mission.branch.name ?? "Not created"} />
-                <Metric label="PR URL" value={mission.branch.pullRequestUrl ?? "Not opened"} />
-                {mission.lastError && <Metric label="Last error" value={mission.lastError} />}
-                {mission.traceUrl && <Metric label="Trace" value={mission.traceUrl} />}
-                {mission.logUrl && <Metric label="Logs" value={mission.logUrl} />}
-              </div>
-            </Panel>
-
-            {/* Checks */}
-            <Panel>
-              <SectionHeader eyebrow="evaluation" title="Checks summary" right={<span className="font-mono text-xs text-slate-500">{mission.checks.filter((c) => c.status === "passed").length}/{mission.checks.length} passed</span>} />
-              <div className="space-y-3 p-5 sm:p-6">
-                {mission.checks.map((check) => (
-                  <div key={check.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-white">{check.label}</p>
-                      <Pill tone={check.status === "passed" ? "green" : check.status === "failed" ? "red" : "gray"}>
-                        {check.status}
-                      </Pill>
-                    </div>
-                    <p className="mt-2 text-sm leading-6 text-white/55">{check.summary}</p>
-                    <p className="mt-2 font-mono text-[0.6rem] text-slate-600">
-                      {fmt(check.startedAt)} → {fmt(check.completedAt)}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </Panel>
+            {/* Mission history */}
+            {recentMissions.length > 0 && (
+              <Panel>
+                <SectionHeader eyebrow="history" title="Recent Missions" right={<span className="font-mono text-xs text-slate-500">{recentMissions.length}</span>} />
+                <div className="space-y-px max-h-[300px] overflow-y-auto">
+                  {recentMissions.map((m) => (
+                    <Link
+                      key={m.id}
+                      href={`/missions/${m.id}`}
+                      className="flex items-center justify-between gap-3 border-b border-white/6 px-5 py-3 last:border-b-0 sm:px-6 hover:bg-white/[0.02] transition"
+                    >
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <span className="font-mono text-xs text-slate-500">#{m.issue.number}</span>
+                        <span className="text-sm text-white/80 truncate">{m.issue.title}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <Pill tone={stateTone(m.state)}>{m.state.replaceAll("_", " ")}</Pill>
+                        <span className="font-mono text-[0.6rem] text-slate-600">{fmt(m.updatedAt)}</span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              </Panel>
+            )}
           </div>
         </div>
       </div>
