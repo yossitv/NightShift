@@ -64,7 +64,7 @@ export function MissionActions({
           disabled={loading}
           className={`rounded-2xl border px-5 py-3 text-sm font-semibold shadow-[0_18px_35px_rgba(99,75,255,0.22)] transition disabled:cursor-not-allowed disabled:opacity-50 ${buttonClasses("primary")}`}
         >
-          {loading ? "Selecting..." : "Select New Issue"}
+          {loading ? "Selecting..." : "Select Another Issue"}
         </button>
       )}
 

@@ -1,11 +1,15 @@
 // GET /api/issues — Fetch open issues for the configured repository (SPEC.md §19)
 
-import { REPO_CONFIG } from "@/lib/config";
+import { REPO_CONFIG, isConfiguredRepo } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const { owner, name, githubToken } = REPO_CONFIG;
+
+  if (!isConfiguredRepo(owner, name)) {
+    return Response.json({ error: `Unsupported repository: ${owner}/${name}` }, { status: 400 });
+  }
 
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",

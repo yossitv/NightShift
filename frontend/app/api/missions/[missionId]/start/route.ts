@@ -93,7 +93,7 @@ async function runMission(missionId: string) {
 
       await appendMissionEvent(missionId, {
         actor: "runner",
-        type: "note_logged",
+        type: "file_changes_completed",
         state: "coding",
         message: "File changes completed.",
       });

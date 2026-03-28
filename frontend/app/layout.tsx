@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 import "./globals.css";
 
@@ -9,6 +9,12 @@ const spaceGrotesk = Space_Grotesk({ variable: "--font-space-grotesk", subsets: 
 export const metadata: Metadata = {
   title: "Night Shift Mission Control",
   description: "Dark mission-control UI for the autonomous issue-to-PR workflow.",
+};
+
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
 };
 
 export default function RootLayout({

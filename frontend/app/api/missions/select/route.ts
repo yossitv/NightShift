@@ -1,6 +1,6 @@
 // POST /api/missions/select — Auto-select issue and create mission (SPEC.md §19)
 
-import { REPO_CONFIG } from "@/lib/config";
+import { REPO_CONFIG, isConfiguredRepo } from "@/lib/config";
 import { createMission, listMissions, getMission, updateMissionState } from "@/src/lib/nightshift/store";
 import { selectIssue } from "@/lib/selector";
 import { requestVoiceApproval } from "@/lib/voice";
@@ -9,6 +9,16 @@ import type { GitHubIssue } from "@/lib/types";
 export const dynamic = "force-dynamic";
 
 export async function POST() {
+  const { owner, name, githubToken } = REPO_CONFIG;
+
+  // §16.1: Reject unsupported repositories
+  if (!isConfiguredRepo(owner, name)) {
+    return Response.json(
+      { error: `Unsupported repository: ${owner}/${name}` },
+      { status: 400 }
+    );
+  }
+
   // Only one active mission at a time
   const existing = await listMissions();
   const active = existing.find((m) =>
@@ -20,9 +30,6 @@ export async function POST() {
       { status: 409 }
     );
   }
-
-  // Fetch open issues
-  const { owner, name, githubToken } = REPO_CONFIG;
   const headers: Record<string, string> = {
     Accept: "application/vnd.github+json",
   };

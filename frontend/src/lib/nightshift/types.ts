@@ -17,7 +17,7 @@ export type MissionState = (typeof MISSION_STATES)[number];
 export const RISK_LEVELS = ["low", "high"] as const;
 export type RiskLevel = (typeof RISK_LEVELS)[number];
 
-export const APPROVAL_STATUSES = ["not_required", "pending", "approved", "declined"] as const;
+export const APPROVAL_STATUSES = ["not_required", "pending", "approved", "declined", "deferred"] as const;
 export type ApprovalStatus = (typeof APPROVAL_STATUSES)[number];
 
 export const CHECK_STATUSES = ["pending", "running", "passed", "failed", "skipped"] as const;
@@ -33,6 +33,7 @@ export const MISSION_EVENT_TYPES = [
   "planning_started",
   "plan_written",
   "coding_started",
+  "file_changes_completed",
   "checks_started",
   "check_passed",
   "check_failed",
@@ -99,7 +100,11 @@ export interface Mission {
   approval: MissionApproval;
   latestAction: string;
   retryCount: number;
+  maxRetries: number;
+  lastError: string | null;
   branch: MissionBranch;
+  traceUrl: string | null;
+  logUrl: string | null;
   checks: CheckResult[];
 }
 
@@ -233,10 +238,14 @@ export function normalizeMission(value: unknown): Mission {
     },
     latestAction: asString(source.latestAction),
     retryCount: asNumber(source.retryCount),
+    maxRetries: asNumber(source.maxRetries, 3),
+    lastError: asNullableString(source.lastError),
     branch: {
       name: asNullableString(branch.name),
       pullRequestUrl: asNullableString(branch.pullRequestUrl),
     },
+    traceUrl: asNullableString(source.traceUrl),
+    logUrl: asNullableString(source.logUrl),
     checks: Array.isArray(source.checks) ? source.checks.map(normalizeCheckResult) : [],
   };
 }

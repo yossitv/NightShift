@@ -173,6 +173,10 @@ export default async function MissionPage({ params }: { params: Promise<{ missio
                 <Metric label="Resolved" value={fmt(mission.approval.resolvedAt)} />
                 <Metric label="Current state" value={mission.state.replaceAll("_", " ")} />
                 <Metric label="Latest action" value={mission.latestAction} />
+                <Metric label="Max retries" value={String(mission.maxRetries)} />
+                {mission.lastError && <Metric label="Last error" value={mission.lastError} />}
+                {mission.traceUrl && <Metric label="Trace link" value={mission.traceUrl} />}
+                {mission.logUrl && <Metric label="Log link" value={mission.logUrl} />}
               </div>
             </Panel>
 

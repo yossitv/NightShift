@@ -245,6 +245,9 @@ export default async function Home() {
                 <Metric label="Resolved" value={fmt(mission.approval.resolvedAt)} />
                 <Metric label="Branch" value={mission.branch.name ?? "Not created"} />
                 <Metric label="PR URL" value={mission.branch.pullRequestUrl ?? "Not opened"} />
+                {mission.lastError && <Metric label="Last error" value={mission.lastError} />}
+                {mission.traceUrl && <Metric label="Trace" value={mission.traceUrl} />}
+                {mission.logUrl && <Metric label="Logs" value={mission.logUrl} />}
               </div>
             </Panel>
 

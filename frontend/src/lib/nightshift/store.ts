@@ -93,10 +93,14 @@ function demoMission(): Mission {
     },
     latestAction: "Local mission snapshot initialized.",
     retryCount: 0,
+    maxRetries: 3,
+    lastError: null,
     branch: {
       name: null,
       pullRequestUrl: null,
     },
+    traceUrl: null,
+    logUrl: null,
     checks: [
       {
         id: "check_local_store",
@@ -201,10 +205,14 @@ export async function createMission(input: CreateMissionInput) {
     approval: buildApproval(input.riskLevel, createdAt),
     latestAction: input.latestAction ?? "Mission created.",
     retryCount: input.retryCount ?? 0,
+    maxRetries: 3,
+    lastError: null,
     branch: {
       name: input.branchName ?? null,
       pullRequestUrl: null,
     },
+    traceUrl: null,
+    logUrl: null,
     checks: input.checks ?? [],
   };
 
@@ -259,6 +267,7 @@ export async function updateMissionState(missionId: string, state: MissionState,
       latestAction: message,
       updatedAt: createdAt,
       approval,
+      lastError: state === "failed" ? message : mission.lastError,
     };
   });
 
