@@ -1,6 +1,7 @@
 // Night Shift MVP — Voice approval adapter (SPEC.md §14, context file)
 
 import { REPO_CONFIG } from "./config";
+import { pollBlandCall } from "./bland-poll";
 import type { VoiceApprovalPayload, VoiceApprovalResult } from "./types";
 
 export async function requestVoiceApproval(
@@ -41,6 +42,12 @@ export async function requestVoiceApproval(
 
       if (res.ok && data.status !== "error" && data.call_id) {
         console.log("Bland AI call queued:", data.call_id);
+
+        // Start polling for result (webhook won't reach localhost)
+        pollBlandCall(data.call_id, payload.missionId).catch((err) => {
+          console.error("Bland poll error:", err);
+        });
+
         return {
           mode: "bland",
           status: "queued",
