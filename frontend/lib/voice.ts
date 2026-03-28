@@ -37,14 +37,19 @@ Ask: Should I proceed with this mission? The user can approve, decline, or defer
         }),
       });
 
-      if (res.ok) {
-        const data = (await res.json()) as { call_id?: string };
+      const data = (await res.json()) as { call_id?: string; status?: string; message?: string };
+
+      if (res.ok && data.status !== "error" && data.call_id) {
+        console.log("Bland AI call queued:", data.call_id);
         return {
           mode: "bland",
           status: "queued",
-          callId: data.call_id ?? null,
+          callId: data.call_id,
         };
       }
+
+      // API returned an error (rate limit, invalid number, etc.)
+      console.error("Bland AI response:", data.status, data.message ?? "unknown error");
     } catch (err) {
       console.error("Bland AI call failed, falling back to print trigger:", err);
     }

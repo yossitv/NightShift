@@ -139,6 +139,37 @@ export function MissionActions({
   );
 }
 
+export function IssueSelectButton({ issueNumber }: { issueNumber: number }) {
+  const router = useRouter();
+  const [loading, setLoading] = useState(false);
+
+  async function select() {
+    setLoading(true);
+    try {
+      await fetch("/api/missions/select", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ issueNumber }),
+      });
+      router.refresh();
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <button
+      onClick={select}
+      disabled={loading}
+      className="shrink-0 rounded-full border border-[#634bff]/40 bg-[#634bff]/10 px-4 py-2 font-mono text-[0.68rem] uppercase tracking-[0.2em] text-[#a594ff] transition hover:bg-[#634bff]/20 disabled:opacity-50"
+    >
+      {loading ? "..." : "Select"}
+    </button>
+  );
+}
+
 export function AutoRefresh({ interval = 3000 }: { interval?: number }) {
   const router = useRouter();
 

@@ -71,12 +71,37 @@ function classifyRisk(issue: GitHubIssue): { level: RiskLevel; note: string } {
   return { level: "low", note: "No high-risk patterns detected. Safe to auto-start." };
 }
 
-export function selectIssue(issues: GitHubIssue[]): SelectionResult | null {
+export function selectIssue(issues: GitHubIssue[], preferIssueNumber?: number): SelectionResult | null {
   if (issues.length === 0) return null;
 
   // Filter out PRs just in case
   const candidates = issues.filter((i) => !i.pull_request);
   if (candidates.length === 0) return null;
+
+  // If a specific issue is requested, use that
+  if (preferIssueNumber) {
+    const preferred = candidates.find((i) => i.number === preferIssueNumber);
+    if (preferred) {
+      const { level, note } = classifyRisk(preferred);
+      const body = preferred.body ?? "";
+      const summary = `Implement: ${preferred.title}. ${body.slice(0, 300)}${body.length > 300 ? "…" : ""}`;
+      const acceptanceCriteria = extractCriteria(body, preferred.number);
+      const nonGoals = [
+        "Do not expand scope beyond the issue description",
+        "Do not refactor unrelated code",
+        "Do not modify CI/CD configuration",
+      ];
+      return {
+        issue: preferred,
+        selectionReason: `Operator selected issue #${preferred.number} directly.`,
+        riskLevel: level,
+        summary,
+        acceptanceCriteria,
+        nonGoals,
+        riskNote: note,
+      };
+    }
+  }
 
   // Score and sort
   const scored = candidates

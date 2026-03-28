@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listMissionEvents, listMissions } from "@/src/lib/nightshift/store";
-import { MissionActions, AutoRefresh } from "./components/MissionActions";
+import { MissionActions, AutoRefresh, IssueSelectButton } from "./components/MissionActions";
+import { REPO_CONFIG } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
@@ -107,20 +108,63 @@ export default async function Home() {
   const events = mission ? (await listMissionEvents(mission.id)).slice(0, 8) : [];
 
   if (!mission) {
+    // Fetch issues for the landing page
+    let issues: Array<{ number: number; title: string; labels: Array<{ name: string }>; body?: string | null }> = [];
+    try {
+      const headers: Record<string, string> = { Accept: "application/vnd.github+json" };
+      if (REPO_CONFIG.githubToken) headers.Authorization = `Bearer ${REPO_CONFIG.githubToken}`;
+      const res = await fetch(
+        `https://api.github.com/repos/${REPO_CONFIG.owner}/${REPO_CONFIG.name}/issues?state=open&per_page=20&sort=updated&direction=desc`,
+        { headers, cache: "no-store" }
+      );
+      if (res.ok) {
+        const raw = await res.json() as Array<Record<string, unknown>>;
+        issues = raw.filter((i) => !i.pull_request) as typeof issues;
+      }
+    } catch { /* ignore */ }
+
     return (
-      <main className="flex min-h-screen items-center justify-center px-6 py-24">
-        <div className="max-w-xl rounded-[2rem] border border-white/10 bg-white/[0.03] p-10 text-center">
-          <div className="mb-4 inline-flex items-center gap-3 rounded-full border border-[#634BFF]/25 bg-[#634BFF]/6 px-5 py-2.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#634BFF]" />
-            <span className="font-mono text-[0.72rem] uppercase tracking-[0.38em] text-[#8B7CFF]">Night Shift</span>
+      <main className="min-h-screen px-3 py-3 sm:px-4">
+        <div className="mx-auto max-w-[900px] space-y-6 py-12">
+          <div className="text-center">
+            <div className="mb-4 inline-flex items-center gap-3 rounded-full border border-[#634BFF]/25 bg-[#634BFF]/6 px-5 py-2.5">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#634BFF]" />
+              <span className="font-mono text-[0.72rem] uppercase tracking-[0.38em] text-[#8B7CFF]">Night Shift</span>
+            </div>
+            <h1 className="mt-4 font-display text-4xl font-bold">Mission Control</h1>
+            <p className="mt-3 text-base leading-7 text-white/60">
+              Select an issue to start an autonomous mission. Auto-select picks the best candidate, or choose one directly.
+            </p>
+            <div className="mt-6">
+              <MissionActions missionId={null} state={null} />
+            </div>
           </div>
-          <h1 className="mt-4 font-display text-4xl font-bold">No active mission.</h1>
-          <p className="mt-4 text-base leading-7 text-white/60">
-            Select an issue from the configured repository to start a new autonomous mission.
-          </p>
-          <div className="mt-8">
-            <MissionActions missionId={null} state={null} />
-          </div>
+
+          {issues.length > 0 && (
+            <Panel>
+              <SectionHeader eyebrow={`${REPO_CONFIG.owner}/${REPO_CONFIG.name}`} title="Open Issues" right={<span className="font-mono text-xs text-slate-500">{issues.length} issues</span>} />
+              <div className="space-y-px">
+                {issues.map((issue) => (
+                  <div key={issue.number} className="flex items-center justify-between gap-4 border-b border-white/6 px-5 py-4 last:border-b-0 sm:px-6">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono text-xs text-slate-500">#{issue.number}</span>
+                        <span className="text-sm font-medium text-white">{issue.title}</span>
+                      </div>
+                      {issue.labels?.length > 0 && (
+                        <div className="mt-1 flex gap-1">
+                          {issue.labels.map((l) => (
+                            <Pill key={l.name} tone="gray">{l.name}</Pill>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <IssueSelectButton issueNumber={issue.number} />
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          )}
         </div>
       </main>
     );

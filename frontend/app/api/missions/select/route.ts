@@ -9,8 +9,17 @@ import type { GitHubIssue } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+export async function POST(req: Request) {
   const { owner, name, githubToken } = REPO_CONFIG;
+
+  // Optional: specify an issue number to select
+  let preferIssueNumber: number | undefined;
+  try {
+    const body = await req.json();
+    if (body?.issueNumber) preferIssueNumber = Number(body.issueNumber);
+  } catch {
+    // No body or invalid JSON — auto-select
+  }
 
   // §16.1: Reject unsupported repositories
   if (!isConfiguredRepo(owner, name)) {
@@ -51,7 +60,7 @@ export async function POST() {
   const raw = (await res.json()) as GitHubIssue[];
   const issues = raw.filter((i) => !i.pull_request);
 
-  const result = selectIssue(issues);
+  const result = selectIssue(issues, preferIssueNumber);
   if (!result) {
     return Response.json(
       { error: "No suitable issues found" },
