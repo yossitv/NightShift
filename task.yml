@@ -1,0 +1,321 @@
+version: 1
+name: Night Shift MVP task breakdown
+source_spec: /Users/ys/Documents/GitHub/NightShift/SPEC.md
+generated_at: 2026-03-29
+
+context:
+  current_state:
+    - "Repository root contains SPEC.md, a supervisor shell script, and a scaffolded Next.js app under frontend/."
+    - "No existing task.yml or project backlog format was found in the repository."
+  assumptions:
+    - "This breakdown targets the MVP described in SPEC.md and follows section 23 Build Order."
+    - "Implementation should stay on the suggested MVP stack unless repo reality forces a narrower choice."
+  constraints:
+    - "Support exactly one configured repository."
+    - "Allow only one active mission at a time."
+    - "Stay branch-only and PR-only; never write directly to protected branches."
+    - "Do not block the demo on unavailable voice infrastructure when a visible manual fallback is possible."
+
+tasks:
+  - id: NS-01
+    title: Mission model and local persistence
+    priority: P0
+    status: done
+    depends_on: []
+    spec_refs:
+      - "11 MVP Architecture"
+      - "16.1 Configured Repository"
+      - "18.1 Mission"
+      - "18.2 Mission Event"
+      - "18.3 Check Result"
+      - "23 Build Order #1"
+    goal: "Define the core mission store and configuration boundary for the one-repo MVP."
+    deliverables:
+      - "Configured repository contract (repo owner/name, local path, branch prefix, retry limit, optional phone config)."
+      - "Persistence layer for Mission, MissionEvent, and CheckResult using local JSON or SQLite."
+      - "Read/write helpers for mission creation, updates, event append, and check-result recording."
+    acceptance_criteria:
+      - "The app can create a mission record that matches the SPEC.md data model."
+      - "The store can persist and reload mission state transitions, events, and check results across process restarts."
+      - "Unsupported repositories are rejected before any mission is created."
+    verification:
+      - "Unit or integration tests for store create/read/update flows."
+      - "Manual readback of a stored mission with events and checks."
+
+  - id: NS-02
+    title: Open issue fetch API
+    priority: P0
+    status: done
+    depends_on:
+      - NS-01
+    spec_refs:
+      - "12 Suggested MVP Stack"
+      - "16.2 Issue Fetching"
+      - "19 GET /api/issues"
+      - "22 Demo Acceptance Criteria #1"
+      - "23 Build Order #2"
+    goal: "Expose configured-repository open issues through a stable API."
+    deliverables:
+      - "Route handler for GET /api/issues."
+      - "GitHub issue fetch integration scoped to the configured repository."
+      - "Filtering for obviously unsupported issue shapes where practical."
+    acceptance_criteria:
+      - "GET /api/issues returns open issues for the configured repository only."
+      - "The response excludes unsupported repositories and fails visibly when configuration is invalid."
+      - "Issue data is sufficient for later selection, planning, and UI rendering."
+    verification:
+      - "Route-level tests with mocked GitHub responses."
+      - "Manual API call against a configured repository."
+
+  - id: NS-03
+    title: Automatic issue selection and risk scoring
+    priority: P0
+    status: done
+    depends_on:
+      - NS-01
+      - NS-02
+    spec_refs:
+      - "13 Automatic Issue Selection Contract"
+      - "16.3 Candidate Selection"
+      - "16.4 Mission Planning"
+      - "19 POST /api/missions/select"
+      - "22 Demo Acceptance Criteria #2-#3"
+      - "23 Build Order #3"
+    goal: "Select one bounded issue, generate the mission draft, and classify it as low or high risk."
+    deliverables:
+      - "Selector logic that prefers bounded/specific issues and rejects oversized or ambiguous ones."
+      - "Mission draft generation: summary, acceptance criteria, non-goals, risk note, selection rationale."
+      - "POST /api/missions/select endpoint that creates a mission in candidate_selected and applies the correct next state."
+    acceptance_criteria:
+      - "A single issue candidate is selected automatically from the configured repository."
+      - "Selection rationale and risk level are persisted on the mission record."
+      - "Low-risk missions move to queued; high-risk missions move to awaiting_approval."
+    verification:
+      - "Deterministic tests for low-risk and high-risk issue samples."
+      - "Manual endpoint run showing mission creation and state selection."
+
+  - id: NS-04
+    title: Mission candidate view and status page
+    priority: P0
+    status: done
+    depends_on:
+      - NS-03
+    spec_refs:
+      - "8.2 Issue Selection UX"
+      - "8.4 Status Page UX"
+      - "16.10 Remote Status Page"
+      - "22 Demo Acceptance Criteria #2, #5, #6, #8"
+      - "23 Build Order #4"
+    goal: "Make selection, approval state, mission state, and checks remotely observable in the frontend."
+    deliverables:
+      - "Candidate view showing selected issue title, rationale, and risk level."
+      - "Mission status page showing mission summary, acceptance criteria, latest event, checks, retry count, branch, and PR URL."
+      - "Mobile-friendly layout with no horizontal scrolling."
+    acceptance_criteria:
+      - "A user can understand what was selected and why without opening the coding terminal."
+      - "The mission page exposes current state, approval status, checks summary, and latest event."
+      - "The page remains usable on mobile widths."
+    verification:
+      - "Frontend smoke test or screenshot-based check across desktop and mobile widths."
+      - "Manual rendering against seeded mission data."
+
+  - id: NS-05
+    title: Voice approval adapter and webhook/manual fallback
+    priority: P0
+    status: done
+    depends_on:
+      - NS-03
+      - NS-04
+    spec_refs:
+      - "8.3 Voice Approval UX"
+      - "14 Voice Approval Contract"
+      - "16.5 Approval Gate"
+      - "19 POST /api/missions/:missionId/approve"
+      - "19 POST /api/missions/:missionId/decline"
+      - "19 POST /api/webhooks/bland"
+      - "22 Demo Acceptance Criteria #4"
+      - "23 Build Order #5"
+    goal: "Gate high-risk missions behind voice approval while keeping a visible manual fallback path."
+    deliverables:
+      - "Voice approval adapter interface and Bland AI integration point."
+      - "Printable/logged fallback trigger payload when real calling is unavailable."
+      - "Webhook and manual approval/decline endpoints that update mission approval status."
+    acceptance_criteria:
+      - "Low-risk missions do not trigger voice approval."
+      - "High-risk missions create an approval request and remain in awaiting_approval until a decision is recorded."
+      - "If the voice provider is unavailable, the system exposes a visible fallback instead of silently failing."
+    verification:
+      - "Tests for approve, decline, and fallback trigger behavior."
+      - "Manual flow proving approval state changes are visible on the status page."
+
+  - id: NS-06
+    title: Script-based runner skeleton with fake state transitions
+    priority: P1
+    status: done
+    depends_on:
+      - NS-01
+      - NS-04
+      - NS-05
+    spec_refs:
+      - "15 Runner Contract"
+      - "16.6 Repository Execution"
+      - "23 Build Order #6"
+    goal: "Stand up the runner contract early so the demo can show a full observable lifecycle before real repo execution exists."
+    deliverables:
+      - "Runner entrypoint that starts only when approval requirements are satisfied."
+      - "Structured event emission for planning, coding, testing, retrying, success, and failure."
+      - "Fake transition mode that updates mission state and logs without touching a repository."
+    acceptance_criteria:
+      - "POST /api/missions/:missionId/start starts the runner only when the mission is queued or otherwise approval-complete."
+      - "The runner emits the required mission events in order."
+      - "The status page updates live enough for demo purposes when the skeleton runner is executed."
+    verification:
+      - "Integration test covering start-gate behavior."
+      - "Manual run demonstrating fake transitions on the status page."
+
+  - id: NS-07
+    title: Real repository checkout and mission branch creation
+    priority: P1
+    status: done
+    depends_on:
+      - NS-06
+    spec_refs:
+      - "15 Runner Contract"
+      - "16.6 Repository Execution"
+      - "21 Safety Rules"
+      - "23 Build Order #7"
+    goal: "Replace fake repository steps with safe local repo preparation for one configured repository."
+    deliverables:
+      - "Clone-or-reuse local repository workflow."
+      - "Mission branch creation using the configured branch prefix."
+      - "Guardrails preventing direct writes to main or other protected branches."
+    acceptance_criteria:
+      - "The runner can prepare the configured repository locally without touching unsupported repositories."
+      - "A mission branch is created or reused safely for the selected mission."
+      - "Protected branches are never used as execution targets."
+    verification:
+      - "Integration test or scripted dry run for branch creation."
+      - "Manual git inspection of created branch and target repo path."
+
+  - id: NS-08
+    title: Codex / OMX execution wrapper
+    priority: P1
+    status: done
+    depends_on:
+      - NS-07
+    spec_refs:
+      - "12 Suggested MVP Stack"
+      - "15 Runner Contract"
+      - "16.6 Repository Execution"
+      - "23 Build Order #8"
+    goal: "Connect the runner to a real coding-agent execution step."
+    deliverables:
+      - "Wrapper that invokes the Codex/OMX workflow with mission context."
+      - "Mission-event mapping for planning started, plan written, coding started, file changes completed, and failure cases."
+      - "Artifact capture for logs and last-error reporting."
+    acceptance_criteria:
+      - "Runner launches the coding-agent wrapper with mission-specific context."
+      - "Major execution milestones are persisted as mission events."
+      - "Failures are recorded in lastError and remain visible on the mission page."
+    verification:
+      - "Manual dry run against a safe sample issue."
+      - "Log inspection proving event emission and artifact paths."
+
+  - id: NS-09
+    title: Test, lint, and requirement evaluation gates
+    priority: P1
+    status: done
+    depends_on:
+      - NS-08
+    spec_refs:
+      - "16.7 Checks"
+      - "18.3 Check Result"
+      - "20 Required Evaluations"
+      - "22 Demo Acceptance Criteria #6"
+      - "23 Build Order #9"
+    goal: "Implement the three required MVP checks before PR creation."
+    deliverables:
+      - "Command-based tests gate."
+      - "Command-based lint and/or typecheck gate."
+      - "LLM-based requirements judgment against the mission acceptance criteria."
+    acceptance_criteria:
+      - "Check results are stored with name, status, summary, raw output, and timestamp."
+      - "The mission cannot proceed to PR creation while required checks are failing."
+      - "The status page shows at least one visible check result and a summary of the full check set."
+    verification:
+      - "Automated tests for passing and failing check persistence."
+      - "Manual run showing check results rendered in the UI."
+
+  - id: NS-10
+    title: Bounded retry loop
+    priority: P1
+    status: done
+    depends_on:
+      - NS-09
+    spec_refs:
+      - "10 Mission Lifecycle"
+      - "16.8 Bounded Retry Loop"
+      - "21 Safety Rules"
+      - "23 Build Order #10"
+    goal: "Retry failed missions with failure context while keeping retries bounded and observable."
+    deliverables:
+      - "Retry controller that captures failure output and increments retryCount."
+      - "State transitions for testing -> retrying -> coding and retrying -> failed."
+      - "Retry budget configuration and run-duration caps."
+    acceptance_criteria:
+      - "When checks fail and retry budget remains, the runner records a retry event and restarts coding with failure context."
+      - "When the retry budget is exhausted, the mission becomes failed with a visible reason."
+      - "Retry count is visible on the mission page."
+    verification:
+      - "Integration test for success-before-budget-exhaustion and fail-after-budget-exhaustion cases."
+      - "Manual seeded failure scenario validating state transitions."
+
+  - id: NS-11
+    title: Commit, push, and pull request creation
+    priority: P1
+    status: done
+    depends_on:
+      - NS-10
+    spec_refs:
+      - "16.9 Pull Request Output"
+      - "15 Required Runner Events"
+      - "22 Demo Acceptance Criteria #7"
+      - "23 Build Order #11"
+    goal: "Package successful work as a reviewable pull request."
+    deliverables:
+      - "Commit creation on the mission branch."
+      - "Branch push and GitHub pull request creation."
+      - "PR title/body generation from the mission summary and acceptance criteria."
+    acceptance_criteria:
+      - "Successful missions create a commit, push the mission branch, and open a pull request."
+      - "Mission state becomes pr_opened and stores the PR URL."
+      - "PR metadata is visible from the mission record and status page."
+    verification:
+      - "Manual dry run or mocked integration for PR creation."
+      - "UI check that PR URL appears once created."
+
+  - id: NS-12
+    title: Logs, trace links, requirement polish, and demo hardening
+    priority: P2
+    status: done
+    depends_on:
+      - NS-11
+    spec_refs:
+      - "8.4 Status Page UX"
+      - "16.10 Remote Status Page"
+      - "17 Non-Functional Requirements"
+      - "20 Evaluation"
+      - "22 Demo Acceptance Criteria"
+      - "23 Build Order #12"
+    goal: "Polish observability and demo reliability so the MVP reads clearly in a short live demo."
+    deliverables:
+      - "Recent logs and optional trace link exposure on the status page."
+      - "Failure copy and audit trail improvements for selection, approval, and execution phases."
+      - "Final UX hardening for mobile readability and operator controls like cancel/manual fallback."
+    acceptance_criteria:
+      - "A judge can inspect what happened from the status page without opening the coding terminal."
+      - "Failures are visible, explainable, and tied to mission events or check results."
+      - "The app preserves enough stored context to explain selection, approval, success, or failure after the run."
+    verification:
+      - "End-to-end demo rehearsal against the acceptance story in section 9."
+      - "Manual inspection of status-page observability after both a success path and a failure path."

@@ -1,0 +1,98 @@
+# Night Shift DeepOps Launch Context
+
+## Source documents
+- `/Users/ys/Documents/GitHub/NightShift/SPEC.md`
+- `https://github.com/ayushozha/deepops`
+
+## Goal
+Implement Night Shift so that launch behavior matches the spec and borrows the approval pattern from DeepOps:
+- low-risk missions start automatically
+- high-risk missions initiate a phone approval flow before coding starts
+- if the phone adapter cannot place a real call, a visible `print` / `console.log` trigger is emitted for manual handling
+
+## Behavioral contract
+- Use `awaiting_approval` only for high-risk missions.
+- Do not call for low-risk missions.
+- Do not start a high-risk runner before approval.
+- Preserve a visible audit trail for request, approval, decline, and fallback trigger.
+
+## DeepOps pattern to mirror
+DeepOps uses:
+- one run entrypoint
+- policy routing into auto path vs phone escalation
+- Bland AI for real calls
+- webhook/manual approval callbacks
+- a local-development-safe fallback path when the live adapter is not available
+
+Night Shift should mirror that with mission semantics instead of incident semantics.
+
+## Required fallback output
+When the call cannot be placed, print a structured trigger payload:
+
+```json
+{
+  "type": "VOICE_APPROVAL_TRIGGER",
+  "missionId": "msn_123",
+  "issueNumber": 42,
+  "issueTitle": "Fix broken signup validation",
+  "riskLevel": "high",
+  "summary": "Patch signup validation and add regression coverage.",
+  "riskNote": "Touches authentication path; approval required.",
+  "approvalUrl": "/api/missions/msn_123/approve",
+  "declineUrl": "/api/missions/msn_123/decline"
+}
+```
+
+## Suggested adapter contract
+```ts
+type VoiceApprovalPayload = {
+  missionId: string;
+  issueNumber: number;
+  issueTitle: string;
+  summary: string;
+  riskLevel: "low" | "high";
+  riskNote: string;
+  phoneNumber: string | null;
+  webhookUrl?: string | null;
+};
+
+type VoiceApprovalResult = {
+  mode: "bland" | "print";
+  status: "queued" | "dry_run" | "failed";
+  callId: string | null;
+};
+```
+
+```ts
+async function requestVoiceApproval(payload: VoiceApprovalPayload): Promise<VoiceApprovalResult> {
+  if (payload.riskLevel !== "high") {
+    return { mode: "print", status: "dry_run", callId: null };
+  }
+
+  if (process.env.BLAND_API_KEY && payload.phoneNumber) {
+    return await blandClient.call(payload);
+  }
+
+  console.log("VOICE_APPROVAL_TRIGGER", {
+    missionId: payload.missionId,
+    issueNumber: payload.issueNumber,
+    issueTitle: payload.issueTitle,
+    riskLevel: payload.riskLevel,
+    summary: payload.summary,
+    riskNote: payload.riskNote,
+  });
+
+  return { mode: "print", status: "dry_run", callId: null };
+}
+```
+
+## State transitions
+- `candidate_selected -> queued` for low-risk missions
+- `candidate_selected -> awaiting_approval` for high-risk missions
+- `awaiting_approval -> queued` on approval
+- `awaiting_approval -> declined` on decline
+
+## Non-negotiables
+- Status page must show approval state.
+- Approval fallback must be visible.
+- Missing voice credentials must degrade to printed triggers, not silent failure.

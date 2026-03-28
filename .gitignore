@@ -1,0 +1,17 @@
+.omx/
+
+# Keep OMX project config under version control, ignore local Codex runtime state.
+.codex/*
+!.codex/agents/
+!.codex/agents/**
+!.codex/config.toml
+!.codex/prompts/
+!.codex/prompts/**
+!.codex/skills/
+!.codex/skills/**
+
+.env
+.data/
+frontend/.data/
+.next/
+frontend/.next/
