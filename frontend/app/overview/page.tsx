@@ -2,8 +2,11 @@ import Link from "next/link";
 import { readMissionStore } from "@/src/lib/nightshift/store";
 import { REPO_CONFIG } from "@/lib/config";
 import { isCodexAvailable } from "@/lib/codex";
-import type { Mission, MissionEvent, CheckResult } from "@/src/lib/nightshift/types";
+import type { Mission, MissionEvent } from "@/src/lib/nightshift/types";
 import { IssueSelectButton } from "../components/MissionActions";
+import { execSync } from "child_process";
+import { join } from "path";
+import { existsSync } from "fs";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +62,20 @@ function fmt(v: string | null) {
   return new Intl.DateTimeFormat("en-US", { dateStyle: "short", timeStyle: "medium" }).format(new Date(v));
 }
 
+function getDiffForBranch(branchName: string | null): { stat: string; diff: string; commits: string } | null {
+  if (!branchName) return null;
+  const repoPath = join(process.cwd(), ".data", "repos", `${REPO_CONFIG.owner}_${REPO_CONFIG.name}`);
+  if (!existsSync(join(repoPath, ".git"))) return null;
+  try {
+    execSync(`git checkout ${branchName} 2>/dev/null || true`, { cwd: repoPath, timeout: 5000 });
+    const stat = execSync("git diff --stat origin/main...HEAD 2>/dev/null || echo ''", { cwd: repoPath, encoding: "utf-8", timeout: 5000 }).trim();
+    const diff = execSync("git diff origin/main...HEAD 2>/dev/null || echo ''", { cwd: repoPath, encoding: "utf-8", timeout: 5000 }).trim();
+    const commits = execSync("git log --oneline origin/main...HEAD 2>/dev/null || echo ''", { cwd: repoPath, encoding: "utf-8", timeout: 5000 }).trim();
+    if (stat || diff) return { stat, diff: diff.slice(0, 15000), commits };
+  } catch { /* ignore */ }
+  return null;
+}
+
 /* ── Page ───────────────────────────────────────────────────── */
 
 export default async function OverviewPage() {
@@ -82,39 +99,38 @@ export default async function OverviewPage() {
     }
   } catch { /* ignore */ }
 
-  // Map issue number → mission
   const issueMissionMap = new Map<number, Mission>();
-  for (const m of missions) {
-    issueMissionMap.set(m.issue.number, m);
-  }
+  for (const m of missions) issueMissionMap.set(m.issue.number, m);
 
-  // System stats
+  // Stats
   const total = missions.length;
   const active = missions.filter((m) => !["pr_opened", "failed", "canceled", "declined"].includes(m.state)).length;
   const succeeded = missions.filter((m) => m.state === "pr_opened").length;
   const failed = missions.filter((m) => m.state === "failed").length;
+  const canceled = missions.filter((m) => m.state === "canceled").length;
+  const declined = missions.filter((m) => m.state === "declined").length;
   const codexReady = isCodexAvailable();
+
+  // Preload diffs for missions that have branches
+  const diffMap = new Map<string, { stat: string; diff: string; commits: string }>();
+  for (const m of missions) {
+    if (m.branch.name) {
+      const d = getDiffForBranch(m.branch.name);
+      if (d) diffMap.set(m.id, d);
+    }
+  }
 
   return (
     <main className="min-h-screen px-3 py-3 sm:px-4">
       <div className="mx-auto max-w-[1400px] space-y-4">
 
-        {/* ── Nav bar ── */}
+        {/* ── Nav ── */}
         <div className="flex h-16 items-center justify-between rounded-2xl border border-[#634BFF]/30 bg-black px-6">
           <div className="flex items-center gap-4">
-            <Link href="/" className="font-display text-xl font-black uppercase tracking-[-0.03em] text-[#634BFF]">
-              Night Shift
-            </Link>
+            <Link href="/" className="font-display text-xl font-black uppercase tracking-[-0.03em] text-[#634BFF]">Night Shift</Link>
             <span className="font-mono text-[0.68rem] uppercase tracking-[0.2em] text-white/40">Overview</span>
           </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/"
-              className="rounded-full border border-white/12 px-4 py-2 font-mono text-[0.68rem] uppercase tracking-[0.2em] text-white/60 transition hover:text-white"
-            >
-              Dashboard
-            </Link>
-          </div>
+          <Link href="/" className="rounded-full border border-white/12 px-4 py-2 font-mono text-[0.68rem] uppercase tracking-[0.2em] text-white/60 transition hover:text-white">Dashboard</Link>
         </div>
 
         {/* ── System status ── */}
@@ -131,21 +147,19 @@ export default async function OverviewPage() {
         </Panel>
 
         {/* ── Summary metrics ── */}
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <MetricCard label="Total Missions" value={String(total)} />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+          <MetricCard label="Total" value={String(total)} />
           <MetricCard label="Active" value={String(active)} tone={active > 0 ? "cyan" : "gray"} />
-          <MetricCard label="Succeeded (PR)" value={String(succeeded)} tone={succeeded > 0 ? "green" : "gray"} />
+          <MetricCard label="PR Opened" value={String(succeeded)} tone={succeeded > 0 ? "green" : "gray"} />
           <MetricCard label="Failed" value={String(failed)} tone={failed > 0 ? "red" : "gray"} />
+          <MetricCard label="Canceled" value={String(canceled)} tone={canceled > 0 ? "orange" : "gray"} />
+          <MetricCard label="Declined" value={String(declined)} tone={declined > 0 ? "red" : "gray"} />
         </div>
 
         {/* ── GitHub Issues ── */}
         {ghIssues.length > 0 && (
           <Panel>
-            <Header
-              eyebrow={`${REPO_CONFIG.owner}/${REPO_CONFIG.name}`}
-              title="GitHub Issues"
-              right={<span className="font-mono text-xs text-slate-500">{ghIssues.length} issues</span>}
-            />
+            <Header eyebrow={`${REPO_CONFIG.owner}/${REPO_CONFIG.name}`} title="GitHub Issues" right={<span className="font-mono text-xs text-slate-500">{ghIssues.length} issues</span>} />
             <div className="divide-y divide-white/6">
               {ghIssues.map((issue) => {
                 const mission = issueMissionMap.get(issue.number);
@@ -154,27 +168,15 @@ export default async function OverviewPage() {
                     <span className="w-10 shrink-0 font-mono text-[0.68rem] text-slate-500">#{issue.number}</span>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <a href={issue.html_url} target="_blank" rel="noreferrer" className="text-sm font-medium text-white hover:text-[#634BFF]">
-                          {issue.title}
-                        </a>
+                        <a href={issue.html_url} target="_blank" rel="noreferrer" className="text-sm font-medium text-white hover:text-[#634BFF]">{issue.title}</a>
                         <Pill tone={issue.state === "open" ? "green" : "gray"}>{issue.state}</Pill>
-                        {issue.labels?.map((l) => (
-                          <Pill key={l.name} tone="gray">{l.name}</Pill>
-                        ))}
+                        {issue.labels?.map((l) => <Pill key={l.name} tone="gray">{l.name}</Pill>)}
                       </div>
-                      <p className="mt-0.5 font-mono text-[0.6rem] text-slate-600">
-                        {new Date(issue.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                      </p>
                     </div>
                     {mission ? (
                       <div className="flex items-center gap-2">
                         <Pill tone={stateTone(mission.state)}>{mission.state.replaceAll("_", " ")}</Pill>
-                        <Link
-                          href={`/missions/${mission.id}`}
-                          className="font-mono text-[0.6rem] text-[#634BFF] hover:text-white"
-                        >
-                          {mission.id}
-                        </Link>
+                        <Link href={`/missions/${mission.id}`} className="font-mono text-[0.6rem] text-[#634BFF] hover:text-white">{mission.id}</Link>
                       </div>
                     ) : (
                       issue.state === "open" && <IssueSelectButton issueNumber={issue.number} />
@@ -186,24 +188,121 @@ export default async function OverviewPage() {
           </Panel>
         )}
 
-        {/* ── All missions ── */}
+        {/* ── All missions (expanded) ── */}
         <Panel>
           <Header eyebrow="mission history" title="All Missions" right={<span className="font-mono text-xs text-slate-500">{total} total</span>} />
           {missions.length === 0 ? (
-            <p className="p-6 text-sm text-white/40">No missions yet. Select an issue from the dashboard to start.</p>
+            <p className="p-6 text-sm text-white/40">No missions yet.</p>
           ) : (
             <div className="divide-y divide-white/6">
-              {missions.map((m) => (
-                <MissionRow key={m.id} mission={m} eventCount={allEvents.filter((e) => e.missionId === m.id).length} />
-              ))}
+              {missions.map((m) => {
+                const mEvents = allEvents.filter((e) => e.missionId === m.id);
+                const diff = diffMap.get(m.id);
+                return (
+                  <div key={m.id} className="px-5 py-4 sm:px-6">
+                    {/* Row header */}
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-mono text-[0.68rem] text-slate-500">{m.id}</span>
+                          <Pill tone={stateTone(m.state)}>{m.state.replaceAll("_", " ")}</Pill>
+                          <Pill tone={m.riskLevel === "high" ? "red" : "green"}>{m.riskLevel}</Pill>
+                          <Pill tone={m.approval.status === "approved" ? "green" : m.approval.status === "declined" ? "red" : m.approval.status === "pending" ? "orange" : "gray"}>
+                            {m.approval.status.replaceAll("_", " ")}
+                          </Pill>
+                        </div>
+                        <Link href={`/missions/${m.id}`} className="mt-1 block text-sm font-medium text-white hover:text-[#634BFF]">
+                          #{m.issue.number} {m.issue.title}
+                        </Link>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <div className="flex items-center gap-1">
+                          {m.checks.map((c) => (
+                            <span key={c.id} className={`h-2.5 w-2.5 rounded-full ${c.status === "passed" ? "bg-emerald-400" : c.status === "failed" ? "bg-red-400" : "bg-slate-600"}`} title={`${c.label}: ${c.status}`} />
+                          ))}
+                        </div>
+                        <p className="mt-1 font-mono text-[0.6rem] text-slate-600">{fmt(m.updatedAt)}</p>
+                      </div>
+                    </div>
+
+                    {/* Latest action */}
+                    <p className="mt-2 text-[0.75rem] text-white/50">{m.latestAction}</p>
+
+                    {/* Error / decline / cancel reason */}
+                    {m.lastError && (
+                      <div className="mt-2 rounded-xl border border-red-300/20 bg-red-300/5 px-3 py-2">
+                        <p className="font-mono text-[0.68rem] text-red-200">{m.lastError}</p>
+                      </div>
+                    )}
+
+                    {/* Branch + PR */}
+                    {(m.branch.name || m.branch.pullRequestUrl) && (
+                      <div className="mt-2 flex flex-wrap items-center gap-3 font-mono text-[0.65rem]">
+                        {m.branch.name && <span className="text-cyan-200/60">{m.branch.name}</span>}
+                        {m.branch.pullRequestUrl && (
+                          <a href={m.branch.pullRequestUrl} target="_blank" rel="noreferrer" className="text-[#634BFF] hover:text-white">{m.branch.pullRequestUrl}</a>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Diff stat (inline) */}
+                    {diff && diff.stat && (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer font-mono text-[0.65rem] text-cyan-200/60 hover:text-cyan-200">
+                          {diff.commits.split("\n").length} commit(s), {diff.stat.split("\n").length - 1} file(s) changed — click to view diff
+                        </summary>
+                        <div className="mt-2 rounded-xl border border-white/8 bg-black/40 p-3">
+                          {diff.commits && (
+                            <div className="mb-2">
+                              {diff.commits.split("\n").map((line, i) => (
+                                <p key={i} className="font-mono text-[0.65rem] text-cyan-200/80">{line}</p>
+                              ))}
+                            </div>
+                          )}
+                          <pre className="font-mono text-[0.6rem] text-white/40 whitespace-pre-wrap">{diff.stat}</pre>
+                          <div className="mt-2 max-h-[300px] overflow-auto border-t border-white/6 pt-2">
+                            <pre className="font-mono text-[0.6rem] leading-4 whitespace-pre-wrap">{
+                              diff.diff.split("\n").map((line, i) => {
+                                let color = "text-white/30";
+                                if (line.startsWith("+") && !line.startsWith("+++")) color = "text-emerald-300";
+                                else if (line.startsWith("-") && !line.startsWith("---")) color = "text-red-300";
+                                else if (line.startsWith("@@")) color = "text-[#634BFF]";
+                                return <span key={i} className={color}>{line}{"\n"}</span>;
+                              })
+                            }</pre>
+                          </div>
+                        </div>
+                      </details>
+                    )}
+
+                    {/* Recent events for this mission */}
+                    {mEvents.length > 0 && (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer font-mono text-[0.65rem] text-white/40 hover:text-white/60">
+                          {mEvents.length} events — click to expand
+                        </summary>
+                        <div className="mt-1 max-h-[200px] overflow-auto rounded-xl border border-white/6 bg-black/20">
+                          {mEvents.slice(0, 15).map((e) => (
+                            <div key={e.id} className="flex items-start gap-3 border-b border-white/4 px-3 py-2 last:border-0">
+                              <span className="shrink-0 font-mono text-[0.55rem] text-slate-600 w-16">{fmt(e.createdAt).split(",")[1]?.trim() ?? fmt(e.createdAt)}</span>
+                              <Pill tone={stateTone(e.state)}>{e.type.replaceAll("_", " ")}</Pill>
+                              <p className="min-w-0 flex-1 text-[0.7rem] text-white/60 truncate">{e.message}</p>
+                            </div>
+                          ))}
+                        </div>
+                      </details>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </Panel>
 
-        {/* ── All events (recent 50) ── */}
+        {/* ── Audit trail ── */}
         <Panel>
           <Header eyebrow="audit trail" title="All Events" right={<span className="font-mono text-xs text-slate-500">{allEvents.length} total, showing latest 50</span>} />
-          <div className="max-h-[600px] divide-y divide-white/6 overflow-y-auto">
+          <div className="max-h-[500px] divide-y divide-white/6 overflow-y-auto">
             {allEvents.slice(0, 50).map((e) => (
               <div key={e.id} className="flex items-start gap-4 px-5 py-3 sm:px-6">
                 <span className="mt-0.5 shrink-0 font-mono text-[0.6rem] text-slate-600 w-28">{fmt(e.createdAt)}</span>
@@ -218,27 +317,26 @@ export default async function OverviewPage() {
           </div>
         </Panel>
 
-        {/* ── API endpoints reference ── */}
+        {/* ── API reference ── */}
         <Panel>
           <Header eyebrow="api reference" title="Available Endpoints" />
           <div className="grid gap-2 p-5 sm:grid-cols-2 lg:grid-cols-3 sm:p-6">
             {[
               { method: "GET", path: "/api/issues", desc: "Open issues" },
               { method: "GET", path: "/api/missions", desc: "All missions" },
-              { method: "POST", path: "/api/missions/select", desc: "Auto-select issue" },
+              { method: "POST", path: "/api/missions/select", desc: "Auto-select or specify {issueNumber}" },
               { method: "GET", path: "/api/missions/:id", desc: "Mission detail" },
               { method: "GET", path: "/api/missions/:id/events", desc: "Mission events" },
+              { method: "GET", path: "/api/missions/:id/diff", desc: "Git diff for mission branch" },
               { method: "POST", path: "/api/missions/:id/approve", desc: "Approve mission" },
-              { method: "POST", path: "/api/missions/:id/decline", desc: "Decline mission" },
+              { method: "POST", path: "/api/missions/:id/decline", desc: "Decline + close issue" },
               { method: "POST", path: "/api/missions/:id/cancel", desc: "Cancel mission" },
               { method: "POST", path: "/api/missions/:id/start", desc: "Start runner" },
               { method: "POST", path: "/api/webhooks/bland", desc: "Voice callback" },
             ].map((ep) => (
               <div key={ep.path} className="rounded-xl border border-white/8 bg-black/30 px-4 py-3">
                 <div className="flex items-center gap-2">
-                  <span className={`font-mono text-[0.6rem] font-bold ${ep.method === "GET" ? "text-cyan-300" : "text-orange-300"}`}>
-                    {ep.method}
-                  </span>
+                  <span className={`font-mono text-[0.6rem] font-bold ${ep.method === "GET" ? "text-cyan-300" : "text-orange-300"}`}>{ep.method}</span>
                   <span className="font-mono text-[0.7rem] text-white/70">{ep.path}</span>
                 </div>
                 <p className="mt-1 text-[0.7rem] text-slate-500">{ep.desc}</p>
@@ -269,49 +367,12 @@ export default async function OverviewPage() {
             ))}
           </div>
         </Panel>
-
       </div>
     </main>
   );
 }
 
 /* ── Sub-components ────────────────────────────────────────── */
-
-function MissionRow({ mission: m, eventCount }: { mission: Mission; eventCount: number }) {
-  return (
-    <Link
-      href={`/missions/${m.id}`}
-      className="flex items-center gap-4 px-5 py-4 transition hover:bg-white/[0.02] sm:px-6"
-    >
-      <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-mono text-[0.68rem] text-slate-500">{m.id}</span>
-          <Pill tone={stateTone(m.state)}>{m.state.replaceAll("_", " ")}</Pill>
-          <Pill tone={m.riskLevel === "high" ? "red" : "green"}>{m.riskLevel}</Pill>
-        </div>
-        <p className="mt-1 text-sm font-medium text-white">
-          #{m.issue.number} {m.issue.title}
-        </p>
-        <p className="mt-1 text-[0.7rem] text-slate-500">
-          {m.latestAction}
-        </p>
-      </div>
-      <div className="shrink-0 text-right">
-        <div className="flex items-center gap-2">
-          {m.checks.map((c) => (
-            <span
-              key={c.id}
-              className={`h-2 w-2 rounded-full ${c.status === "passed" ? "bg-emerald-400" : c.status === "failed" ? "bg-red-400" : "bg-slate-600"}`}
-              title={`${c.label}: ${c.status}`}
-            />
-          ))}
-        </div>
-        <p className="mt-1 font-mono text-[0.6rem] text-slate-600">{eventCount} events</p>
-        <p className="font-mono text-[0.6rem] text-slate-600">{fmt(m.updatedAt)}</p>
-      </div>
-    </Link>
-  );
-}
 
 function StatCard({ label, value, tone }: { label: string; value: string; tone?: string }) {
   const dotColor = tone === "green" ? "bg-emerald-400" : tone === "red" ? "bg-red-400" : tone === "orange" ? "bg-orange-400" : "bg-slate-500";
@@ -327,7 +388,7 @@ function StatCard({ label, value, tone }: { label: string; value: string; tone?:
 }
 
 function MetricCard({ label, value, tone = "gray" }: { label: string; value: string; tone?: string }) {
-  const border = tone === "green" ? "border-emerald-300/25" : tone === "red" ? "border-red-300/25" : tone === "cyan" ? "border-cyan-300/25" : "border-white/10";
+  const border = tone === "green" ? "border-emerald-300/25" : tone === "red" ? "border-red-300/25" : tone === "cyan" ? "border-cyan-300/25" : tone === "orange" ? "border-orange-300/25" : "border-white/10";
   return (
     <div className={`rounded-[1.75rem] border ${border} bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] px-6 py-5`}>
       <p className="font-mono text-[0.68rem] uppercase tracking-[0.28em] text-slate-500">{label}</p>
