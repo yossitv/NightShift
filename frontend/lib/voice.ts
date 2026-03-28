@@ -22,13 +22,15 @@ export async function requestVoiceApproval(
         },
         body: JSON.stringify({
           phone_number: payload.phoneNumber,
-          task: `You are Night Shift, an autonomous coding assistant. You need approval for a high-risk mission.
-Issue: ${payload.issueTitle}.
+          task: `You are Night Shift, an autonomous coding assistant. A high-risk mission needs approval.
+The issue is: ${payload.issueTitle}.
 Summary: ${payload.summary}.
-Risk: ${payload.riskNote}.
-Ask: Should I proceed with this mission? The user can approve, decline, or defer.`,
+Risk reason: ${payload.riskNote}.
+Ask the user: Do you approve this mission? They can say yes to approve, no to decline, or later to defer.
+Keep it brief and clear.`,
           voice: "mason",
           wait_for_greeting: true,
+          max_duration: 60,
           webhook: payload.webhookUrl ?? null,
           metadata: {
             missionId: payload.missionId,
