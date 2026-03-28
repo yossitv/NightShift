@@ -2,6 +2,10 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { AutoRefresh, MissionActions } from "../../components/MissionActions";
 import { getMission, listMissionEvents } from "@/src/lib/nightshift/store";
+import { execSync } from "child_process";
+import { join } from "path";
+import { existsSync } from "fs";
+import { REPO_CONFIG } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +79,19 @@ export default async function MissionPage({ params }: { params: Promise<{ missio
 
   const events = (await listMissionEvents(mission.id)).slice(0, 12);
   const passedChecks = mission.checks.filter((c) => c.status === "passed").length;
+
+  // Fetch diff if branch exists
+  let diffData: { stat: string; diff: string; commits: string } | null = null;
+  const repoPath = join(process.cwd(), ".data", "repos", `${REPO_CONFIG.owner}_${REPO_CONFIG.name}`);
+  if (mission.branch.name && existsSync(join(repoPath, ".git"))) {
+    try {
+      execSync(`git checkout ${mission.branch.name} 2>/dev/null || true`, { cwd: repoPath, timeout: 5000 });
+      const stat = execSync("git diff --stat origin/main...HEAD 2>/dev/null || echo ''", { cwd: repoPath, encoding: "utf-8", timeout: 5000 }).trim();
+      const diff = execSync("git diff origin/main...HEAD 2>/dev/null || echo ''", { cwd: repoPath, encoding: "utf-8", timeout: 5000 }).trim();
+      const commits = execSync("git log --oneline origin/main...HEAD 2>/dev/null || echo ''", { cwd: repoPath, encoding: "utf-8", timeout: 5000 }).trim();
+      if (stat || diff) diffData = { stat, diff: diff.slice(0, 30000), commits };
+    } catch { /* ignore */ }
+  }
 
   return (
     <main className="min-h-screen px-3 py-3 sm:px-4">
@@ -210,6 +227,50 @@ export default async function MissionPage({ params }: { params: Promise<{ missio
             </Panel>
           </div>
         </div>
+
+        {/* ── Diff viewer (full width) ── */}
+        {diffData && (
+          <Panel>
+            <SectionHeader
+              eyebrow="code changes"
+              title="Git Diff"
+              right={<span className="font-mono text-xs text-slate-500">{mission.branch.name}</span>}
+            />
+            {diffData.commits && (
+              <div className="border-b border-white/6 px-5 py-3 sm:px-6">
+                <p className="font-mono text-[0.68rem] uppercase tracking-[0.28em] text-slate-500 mb-2">Commits</p>
+                {diffData.commits.split("\n").map((line, i) => (
+                  <p key={i} className="font-mono text-[0.72rem] text-cyan-200/80">{line}</p>
+                ))}
+              </div>
+            )}
+            {diffData.stat && (
+              <div className="border-b border-white/6 px-5 py-3 sm:px-6">
+                <p className="font-mono text-[0.68rem] uppercase tracking-[0.28em] text-slate-500 mb-2">Stat</p>
+                <pre className="font-mono text-[0.72rem] text-white/60 whitespace-pre-wrap">{diffData.stat}</pre>
+              </div>
+            )}
+            <div className="max-h-[600px] overflow-auto px-5 py-3 sm:px-6">
+              <pre className="font-mono text-[0.68rem] leading-5 whitespace-pre-wrap">
+                {diffData.diff.split("\n").map((line, i) => {
+                  let color = "text-white/40";
+                  if (line.startsWith("+") && !line.startsWith("+++")) color = "text-emerald-300";
+                  else if (line.startsWith("-") && !line.startsWith("---")) color = "text-red-300";
+                  else if (line.startsWith("@@")) color = "text-[#634BFF]";
+                  else if (line.startsWith("diff ") || line.startsWith("index ")) color = "text-slate-500";
+                  return <span key={i} className={color}>{line}{"\n"}</span>;
+                })}
+              </pre>
+            </div>
+          </Panel>
+        )}
+
+        {!diffData && mission.branch.name && (
+          <Panel>
+            <SectionHeader eyebrow="code changes" title="Git Diff" />
+            <p className="p-6 text-sm text-white/40">No diff available yet. The runner may still be coding.</p>
+          </Panel>
+        )}
       </div>
     </main>
   );
