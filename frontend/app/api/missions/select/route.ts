@@ -4,6 +4,7 @@ import { REPO_CONFIG, isConfiguredRepo } from "@/lib/config";
 import { createMission, listMissions, getMission, updateMissionState } from "@/src/lib/nightshift/store";
 import { selectIssue } from "@/lib/selector";
 import { requestVoiceApproval } from "@/lib/voice";
+import { runMission } from "@/lib/runner-core";
 import type { GitHubIssue } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -112,17 +113,9 @@ export async function POST() {
     );
 
     // §8.1 step 5: Low-risk missions start automatically
-    try {
-      const startRes = await fetch(
-        `${process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000"}/api/missions/${mission.id}/start`,
-        { method: "POST" }
-      );
-      if (!startRes.ok) {
-        console.log("Auto-start note:", await startRes.text());
-      }
-    } catch (err) {
-      console.log("Auto-start skipped:", err);
-    }
+    runMission(mission.id).catch((err) => {
+      console.error("Auto-start runner error:", err);
+    });
   }
 
   const updated = await getMission(mission.id);
