@@ -1,15 +1,19 @@
 // Night Shift MVP — Git operations (SPEC.md §16.6, §16.9, §21)
-// Clone/reuse repo, create mission branches, commit, push, create PR.
+// Manages dev-app/ as a worktree of the configured repository.
+// The repo configured via GITHUB_REPO_OWNER/GITHUB_REPO_NAME env vars
+// is cloned once, then mission branches are created as worktrees under dev-app/.
 
 import { execSync } from "child_process";
 import { existsSync } from "fs";
 import { join } from "path";
 import { REPO_CONFIG } from "./config";
 
-const REPOS_DIR = join(process.cwd(), ".data", "repos");
+// Bare clone lives here (hidden)
+const BARE_DIR = join(process.cwd(), ".data", "bare-repo");
+// Working directory for the current mission branch
+const DEV_APP = join(process.cwd(), "..", "dev-app");
 
 function sanitize(text: string): string {
-  // §21: Do not store secrets in logs or status views
   return text.replace(/x-access-token:[^@]+@/g, "x-access-token:***@");
 }
 
@@ -28,86 +32,107 @@ function run(cmd: string, cwd?: string): string {
 }
 
 export function getRepoPath(): string {
-  return join(REPOS_DIR, `${REPO_CONFIG.owner}_${REPO_CONFIG.name}`);
+  return DEV_APP;
 }
 
 /**
- * Clone the configured repo if not already cloned, or fetch latest.
+ * Ensure the bare clone exists and is up to date.
  */
-export function ensureRepo(): string {
-  const repoPath = getRepoPath();
-
-  if (existsSync(join(repoPath, ".git"))) {
-    // Already cloned — fetch latest
-    run("git fetch origin", repoPath);
-    return repoPath;
+function ensureBare(): string {
+  if (existsSync(join(BARE_DIR, "HEAD"))) {
+    run("git fetch origin", BARE_DIR);
+    return BARE_DIR;
   }
 
-  // Clone fresh
   const { owner, name, githubToken } = REPO_CONFIG;
-  let cloneUrl: string;
-  if (githubToken) {
-    cloneUrl = `https://x-access-token:${githubToken}@github.com/${owner}/${name}.git`;
-  } else {
-    cloneUrl = `https://github.com/${owner}/${name}.git`;
-  }
+  const cloneUrl = githubToken
+    ? `https://x-access-token:${githubToken}@github.com/${owner}/${name}.git`
+    : `https://github.com/${owner}/${name}.git`;
 
-  execSync(`mkdir -p ${REPOS_DIR}`, { encoding: "utf-8" });
-  run(`git clone --depth 50 ${cloneUrl} ${repoPath}`);
-  return repoPath;
+  execSync(`mkdir -p ${BARE_DIR}`, { encoding: "utf-8" });
+  run(`git clone --bare ${cloneUrl} ${BARE_DIR}`);
+  return BARE_DIR;
 }
 
 /**
- * Create (or reset to) a mission branch from origin/main.
+ * Create dev-app/ as a worktree for the given branch.
+ * If dev-app/ already exists, switch it to the new branch.
  */
 export function createBranch(branchName: string): string {
-  const repoPath = ensureRepo();
+  const bare = ensureBare();
 
-  // Determine default branch
-  let defaultBranch = "main";
-  try {
-    defaultBranch = run("git symbolic-ref refs/remotes/origin/HEAD", repoPath)
-      .replace("refs/remotes/origin/", "");
-  } catch {
-    // fallback to main
-  }
-
-  // Safety: never work directly on protected branches
-  if (branchName === defaultBranch || branchName === "main" || branchName === "master") {
+  // Safety: never work on protected branches
+  if (branchName === "main" || branchName === "master") {
     throw new Error(`Refusing to work on protected branch: ${branchName}`);
   }
 
-  // Create or switch to branch
-  try {
-    run(`git checkout -B ${branchName} origin/${defaultBranch}`, repoPath);
-  } catch {
-    run(`git checkout -b ${branchName}`, repoPath);
+  if (existsSync(join(DEV_APP, ".git"))) {
+    // dev-app/ worktree already exists — switch branch
+    try {
+      run(`git fetch origin`, DEV_APP);
+    } catch { /* bare might not have remote configured in worktree */ }
+    try {
+      run(`git checkout -B ${branchName} origin/main`, DEV_APP);
+    } catch {
+      run(`git checkout -b ${branchName}`, DEV_APP);
+    }
+    return DEV_APP;
   }
 
-  return repoPath;
+  // Create fresh worktree
+  // First create the branch in the bare repo
+  try {
+    run(`git branch ${branchName} origin/main 2>/dev/null || git branch ${branchName} main`, bare);
+  } catch {
+    // Branch might already exist
+  }
+
+  try {
+    run(`git worktree add ${DEV_APP} ${branchName}`, bare);
+  } catch {
+    // Worktree might already be registered — try direct clone fallback
+    if (!existsSync(join(DEV_APP, ".git"))) {
+      const { owner, name, githubToken } = REPO_CONFIG;
+      const cloneUrl = githubToken
+        ? `https://x-access-token:${githubToken}@github.com/${owner}/${name}.git`
+        : `https://github.com/${owner}/${name}.git`;
+      run(`git clone --depth 50 -b main ${cloneUrl} ${DEV_APP}`);
+      run(`git checkout -b ${branchName}`, DEV_APP);
+    }
+  }
+
+  return DEV_APP;
 }
 
 /**
  * Stage all changes, commit with a message.
  */
 export function commitChanges(message: string): string {
-  const repoPath = getRepoPath();
-  run("git add -A", repoPath);
-
-  // Check if there are changes to commit
-  const status = run("git status --porcelain", repoPath);
+  run("git add -A", DEV_APP);
+  const status = run("git status --porcelain", DEV_APP);
   if (!status) return "no changes";
 
-  run(`git commit -m "${message.replace(/"/g, '\\"')}"`, repoPath);
-  return run("git rev-parse --short HEAD", repoPath);
+  run(`git commit -m "${message.replace(/"/g, '\\"')}"`, DEV_APP);
+  return run("git rev-parse --short HEAD", DEV_APP);
 }
 
 /**
  * Push the branch to origin.
  */
 export function pushBranch(branchName: string): void {
-  const repoPath = getRepoPath();
-  run(`git push -u origin ${branchName}`, repoPath);
+  // Ensure remote is configured in the worktree
+  const { owner, name, githubToken } = REPO_CONFIG;
+  const pushUrl = githubToken
+    ? `https://x-access-token:${githubToken}@github.com/${owner}/${name}.git`
+    : `https://github.com/${owner}/${name}.git`;
+
+  try {
+    run(`git remote set-url origin ${pushUrl}`, DEV_APP);
+  } catch {
+    run(`git remote add origin ${pushUrl}`, DEV_APP);
+  }
+
+  run(`git push -u origin ${branchName}`, DEV_APP);
 }
 
 /**
@@ -121,7 +146,6 @@ export async function createPullRequest(opts: {
   const { owner, name, githubToken } = REPO_CONFIG;
 
   if (!githubToken) {
-    // Simulate PR creation for demo without token
     const prUrl = `https://github.com/${owner}/${name}/compare/${opts.branchName}?expand=1`;
     return { prUrl, prNumber: 0 };
   }
@@ -163,14 +187,12 @@ export async function closeIssue(issueNumber: number, comment: string): Promise<
     "Content-Type": "application/json",
   };
 
-  // Add comment
   await fetch(`https://api.github.com/repos/${owner}/${name}/issues/${issueNumber}/comments`, {
     method: "POST",
     headers,
     body: JSON.stringify({ body: comment }),
   });
 
-  // Close issue
   await fetch(`https://api.github.com/repos/${owner}/${name}/issues/${issueNumber}`, {
     method: "PATCH",
     headers,
@@ -182,10 +204,13 @@ export async function closeIssue(issueNumber: number, comment: string): Promise<
  * Get a summary of the diff on the current branch vs origin/main.
  */
 export function getDiffSummary(): string {
-  const repoPath = getRepoPath();
   try {
-    return run("git diff --stat origin/main...HEAD", repoPath);
+    return run("git diff --stat origin/main...HEAD", DEV_APP);
   } catch {
-    return run("git diff --stat HEAD~1", repoPath);
+    try {
+      return run("git diff --stat HEAD~1", DEV_APP);
+    } catch {
+      return "";
+    }
   }
 }

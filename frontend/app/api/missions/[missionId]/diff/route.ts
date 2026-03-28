@@ -18,7 +18,7 @@ export async function GET(
     return Response.json({ error: "Mission not found" }, { status: 404 });
   }
 
-  const repoPath = join(process.cwd(), ".data", "repos", `${REPO_CONFIG.owner}_${REPO_CONFIG.name}`);
+  const repoPath = join(process.cwd(), "..", "dev-app");
   if (!existsSync(join(repoPath, ".git"))) {
     return Response.json({ diff: null, stat: null, message: "No cloned repository found." });
   }

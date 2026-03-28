@@ -62,7 +62,7 @@ function fmt(v: string | null) {
   return new Intl.DateTimeFormat("en-US", { dateStyle: "short", timeStyle: "medium" }).format(new Date(v));
 }
 
-const REPO_PATH = join(process.cwd(), ".data", "repos", `${REPO_CONFIG.owner}_${REPO_CONFIG.name}`);
+const REPO_PATH = join(process.cwd(), "..", "dev-app");
 let _fetched = false;
 
 function ensureFetched() {

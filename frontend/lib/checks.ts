@@ -24,8 +24,11 @@ function runCmd(cmd: string, cwd: string): { ok: boolean; output: string } {
 
 function findAppDir(repoPath: string): string {
   // Prefer demo-app/ if it exists, otherwise use repo root
-  const demoApp = join(repoPath, "demo-app");
-  if (existsSync(join(demoApp, "package.json"))) return demoApp;
+  // Check common app subdirectories
+  for (const sub of ["demo-app", "app", "src"]) {
+    const dir = join(repoPath, sub);
+    if (existsSync(join(dir, "package.json"))) return dir;
+  }
   return repoPath;
 }
 

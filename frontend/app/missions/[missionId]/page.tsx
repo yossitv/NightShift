@@ -82,7 +82,7 @@ export default async function MissionPage({ params }: { params: Promise<{ missio
 
   // Fetch diff if branch exists (no checkout — use branch ref directly)
   let diffData: { stat: string; diff: string; commits: string } | null = null;
-  const repoPath = join(process.cwd(), ".data", "repos", `${REPO_CONFIG.owner}_${REPO_CONFIG.name}`);
+  const repoPath = join(process.cwd(), "..", "dev-app");
   if (mission.branch.name && existsSync(join(repoPath, ".git"))) {
     try {
       const branch = mission.branch.name;
