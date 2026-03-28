@@ -132,10 +132,9 @@ function demoEvent(mission: Mission): MissionEvent {
 }
 
 function defaultSnapshot(): MissionStoreSnapshot {
-  const mission = demoMission();
   return {
-    missions: [mission],
-    events: [demoEvent(mission)],
+    missions: [],
+    events: [],
   };
 }
 
