@@ -13,6 +13,7 @@ export function MissionActions({
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const terminal = ["pr_opened", "failed", "canceled", "declined"];
 
   async function action(url: string, method = "POST") {
     setLoading(true);
@@ -20,7 +21,9 @@ export function MissionActions({
     try {
       const res = await fetch(url, { method });
       const data = await res.json();
-      if (!res.ok) setError(data.error ?? "Request failed");
+      if (!res.ok) {
+        setError(data.error ?? "Request failed");
+      }
       router.refresh();
     } catch (err) {
       setError(String(err));
@@ -29,16 +32,63 @@ export function MissionActions({
     }
   }
 
+  function buttonClasses(tone: "primary" | "approve" | "decline" | "launch" | "ghost" | "cancel") {
+    if (tone === "approve") {
+      return "border-[#14532d] bg-[#14532d]/80 text-[#dcfce7] hover:bg-[#166534]";
+    }
+
+    if (tone === "decline") {
+      return "border-[#7f1d1d] bg-[#7f1d1d]/85 text-[#ffe4e6] hover:bg-[#991b1b]";
+    }
+
+    if (tone === "launch") {
+      return "border-[#0f766e] bg-[#0f766e]/80 text-[#ccfbf1] hover:bg-[#115e59]";
+    }
+
+    if (tone === "ghost") {
+      return "border-white/10 bg-white/[0.03] text-slate-100 hover:border-[#634bff]/35 hover:text-white";
+    }
+
+    if (tone === "cancel") {
+      return "border-white/10 bg-transparent text-slate-300 hover:border-[#7f1d1d]/35 hover:text-[#fecdd3]";
+    }
+
+    return "border-[#634bff]/40 bg-[#634bff]/85 text-white hover:bg-[#745fff]";
+  }
+
   return (
     <div className="flex flex-wrap items-center gap-3">
-      {(!missionId || ["pr_opened", "failed", "canceled", "declined"].includes(state ?? "")) && (
+      {(!missionId || terminal.includes(state ?? "")) && (
         <button
           onClick={() => action("/api/missions/select")}
           disabled={loading}
-          className="rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-indigo-500 disabled:opacity-50"
+          className={`rounded-2xl border px-5 py-3 text-sm font-semibold shadow-[0_18px_35px_rgba(99,75,255,0.22)] transition disabled:cursor-not-allowed disabled:opacity-50 ${buttonClasses("primary")}`}
         >
           {loading ? "Selecting..." : "Select New Issue"}
         </button>
+      )}
+
+      {state === "candidate_selected" && missionId && (
+        <>
+          <button
+            onClick={() => {
+              action(`/api/missions/${missionId}/cancel`).then(() => {
+                action("/api/missions/select");
+              });
+            }}
+            disabled={loading}
+            className={`rounded-2xl border px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${buttonClasses("ghost")}`}
+          >
+            Skip
+          </button>
+          <button
+            onClick={() => action(`/api/missions/${missionId}/approve`)}
+            disabled={loading}
+            className={`rounded-2xl border px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${buttonClasses("approve")}`}
+          >
+            Start Anyway
+          </button>
+        </>
       )}
 
       {state === "awaiting_approval" && missionId && (
@@ -46,14 +96,14 @@ export function MissionActions({
           <button
             onClick={() => action(`/api/missions/${missionId}/approve`)}
             disabled={loading}
-            className="rounded-xl bg-emerald-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-500 disabled:opacity-50"
+            className={`rounded-2xl border px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${buttonClasses("approve")}`}
           >
             Approve
           </button>
           <button
             onClick={() => action(`/api/missions/${missionId}/decline`)}
             disabled={loading}
-            className="rounded-xl bg-rose-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-rose-500 disabled:opacity-50"
+            className={`rounded-2xl border px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${buttonClasses("decline")}`}
           >
             Decline
           </button>
@@ -64,24 +114,24 @@ export function MissionActions({
         <button
           onClick={() => action(`/api/missions/${missionId}/start`)}
           disabled={loading}
-          className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-500 disabled:opacity-50"
+          className={`rounded-2xl border px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${buttonClasses("launch")}`}
         >
           {loading ? "Starting..." : "Start Mission"}
         </button>
       )}
 
-      {missionId && state && !["pr_opened", "failed", "canceled", "declined"].includes(state) && (
+      {missionId && state && !terminal.includes(state) && state !== "candidate_selected" && (
         <button
           onClick={() => action(`/api/missions/${missionId}/cancel`)}
           disabled={loading}
-          className="rounded-xl border border-slate-300 px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-rose-300 hover:text-rose-600 disabled:opacity-50"
+          className={`rounded-2xl border px-5 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${buttonClasses("cancel")}`}
         >
           Cancel
         </button>
       )}
 
       {error && (
-        <span className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs text-rose-700">
+        <span className="rounded-2xl border border-[#7f1d1d] bg-[#7f1d1d]/35 px-3 py-2 font-label-ui text-[11px] uppercase tracking-[0.16em] text-[#fecdd3]">
           {error}
         </span>
       )}
@@ -93,8 +143,8 @@ export function AutoRefresh({ interval = 3000 }: { interval?: number }) {
   const router = useRouter();
 
   useEffect(() => {
-    const id = window.setInterval(() => router.refresh(), interval);
-    return () => window.clearInterval(id);
+    const handle = window.setInterval(() => router.refresh(), interval);
+    return () => window.clearInterval(handle);
   }, [interval, router]);
 
   return null;

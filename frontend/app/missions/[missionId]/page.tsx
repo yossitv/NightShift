@@ -1,193 +1,203 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-
 import { AutoRefresh, MissionActions } from "../../components/MissionActions";
 import { getMission, listMissionEvents } from "@/src/lib/nightshift/store";
 
 export const dynamic = "force-dynamic";
 
-function formatTimestamp(value: string | null) {
-  if (!value) {
-    return "—";
-  }
+/* ── Primitives (DeepOps style) ────────────────────────────── */
 
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-function pillClasses(value: string) {
-  if (value === "high" || value === "failed" || value === "declined") {
-    return "border-rose-200 bg-rose-50 text-rose-700";
-  }
-
-  if (value === "approved" || value === "passed" || value === "queued" || value === "pr_opened") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (value === "pending" || value === "awaiting_approval" || value === "running" || value === "retrying") {
-    return "border-amber-200 bg-amber-50 text-amber-700";
-  }
-
-  return "border-slate-200 bg-slate-100 text-slate-700";
-}
-
-function MetricCard({
-  label,
-  value,
-  tone = "light",
-}: {
-  label: string;
-  value: string;
-  tone?: "light" | "dark";
-}) {
+function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-2xl border p-4 ${tone === "dark" ? "border-white/10 bg-white/5" : "border-slate-200 bg-slate-50"}`}>
-      <p className={`text-xs font-semibold uppercase tracking-[0.16em] ${tone === "dark" ? "text-slate-400" : "text-slate-500"}`}>{label}</p>
-      <p className={`mt-3 text-sm font-medium leading-6 ${tone === "dark" ? "text-slate-50" : "text-slate-900"}`}>{value}</p>
+    <section className={`rounded-[1.75rem] border border-white/15 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] shadow-[0_0_0_1px_rgba(0,212,255,0.05)] ${className}`}>
+      {children}
+    </section>
+  );
+}
+
+function SectionHeader({ eyebrow, title, right }: { eyebrow: string; title: string; right?: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 sm:px-6">
+      <div className="space-y-1">
+        <p className="font-mono text-[0.7rem] uppercase tracking-[0.32em] text-cyan-200/70">{eyebrow}</p>
+        <h2 className="text-lg font-semibold text-white">{title}</h2>
+      </div>
+      {right}
     </div>
   );
 }
 
+function Pill({ tone = "gray", children }: { tone?: "cyan" | "green" | "orange" | "red" | "gray" | "purple"; children: React.ReactNode }) {
+  const colors = {
+    cyan: "border-cyan-300/35 bg-cyan-300/10 text-cyan-100",
+    green: "border-emerald-300/35 bg-emerald-300/10 text-emerald-100",
+    orange: "border-orange-300/35 bg-orange-300/10 text-orange-100",
+    red: "border-red-300/35 bg-red-300/10 text-red-100",
+    gray: "border-white/15 bg-white/5 text-slate-200",
+    purple: "border-[#634BFF]/35 bg-[#634BFF]/10 text-[#a594ff]",
+  };
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 font-mono text-[0.68rem] uppercase tracking-[0.2em] ${colors[tone]}`}>
+      {children}
+    </span>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+      <p className="font-mono text-[0.68rem] uppercase tracking-[0.28em] text-slate-500">{label}</p>
+      <p className="mt-2 text-sm text-white break-all">{value}</p>
+    </div>
+  );
+}
+
+function stateTone(s: string): "cyan" | "green" | "orange" | "red" | "gray" | "purple" {
+  if (s === "pr_opened") return "green";
+  if (s === "failed" || s === "declined" || s === "canceled") return "red";
+  if (s === "awaiting_approval" || s === "retrying") return "orange";
+  if (s === "planning" || s === "coding" || s === "testing") return "cyan";
+  if (s === "queued" || s === "candidate_selected") return "purple";
+  return "gray";
+}
+
+function fmt(value: string | null) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+/* ── Page ───────────────────────────────────────────────────── */
+
 export default async function MissionPage({ params }: { params: Promise<{ missionId: string }> }) {
   const { missionId } = await params;
   const mission = await getMission(missionId);
+  if (!mission) notFound();
 
-  if (!mission) {
-    notFound();
-  }
-
-  const events = (await listMissionEvents(mission.id)).slice(0, 8);
-  const passedChecks = mission.checks.filter((check) => check.status === "passed").length;
+  const events = (await listMissionEvents(mission.id)).slice(0, 12);
+  const passedChecks = mission.checks.filter((c) => c.status === "passed").length;
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(15,23,42,0.10),_transparent_24%),linear-gradient(180deg,_#020617_0%,_#0f172a_36%,_#e2e8f0_100%)] px-4 py-6 text-slate-900 sm:px-6 sm:py-8">
+    <main className="min-h-screen px-3 py-3 sm:px-4">
       <AutoRefresh interval={3000} />
-      <div className="mx-auto flex w-full max-w-5xl flex-col gap-6">
-        <section className="rounded-[2rem] border border-white/10 bg-slate-950/90 p-6 text-slate-50 shadow-[0_20px_80px_rgba(2,6,23,0.45)] sm:p-8">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-indigo-300">Night Shift mission</p>
-              <h1 className="mt-3 text-3xl font-semibold tracking-[-0.04em] text-white sm:text-5xl">{mission.issue.title}</h1>
-            </div>
-            <Link
-              href="/"
-              className="rounded-full border border-white/15 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-indigo-300 hover:text-white"
-            >
-              Back to board
-            </Link>
-          </div>
+      <div className="mx-auto max-w-[1200px] space-y-4">
 
-          <div className="mt-5 flex flex-wrap gap-2">
-            <span className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] ${pillClasses(mission.riskLevel)}`}>
-              {mission.riskLevel} risk
-            </span>
-            <span className={`rounded-full border px-3 py-1 text-xs font-semibold capitalize ${pillClasses(mission.state)}`}>
-              {mission.state.replaceAll("_", " ")}
-            </span>
-            <span className={`rounded-full border px-3 py-1 text-xs font-semibold capitalize ${pillClasses(mission.approval.status)}`}>
-              {mission.approval.status.replaceAll("_", " ")}
-            </span>
-          </div>
-
-          <p className="mt-5 max-w-3xl text-base leading-7 text-slate-300 sm:text-lg">{mission.summary}</p>
-
-          <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <MetricCard label="Issue" value={`#${mission.issue.number}`} tone="dark" />
-            <MetricCard label="Retry count" value={String(mission.retryCount)} tone="dark" />
-            <MetricCard label="Branch" value={mission.branch.name ?? "Branch pending"} tone="dark" />
-            <MetricCard label="PR URL" value={mission.branch.pullRequestUrl ?? "PR pending"} tone="dark" />
-          </div>
-
-          <div className="mt-6">
-            <MissionActions missionId={mission.id} state={mission.state} />
-          </div>
-        </section>
-
-        <section className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-          <div className="space-y-6">
-            <div className="rounded-[2rem] border border-slate-200 bg-white/90 p-6 shadow-[0_20px_80px_rgba(15,23,42,0.08)]">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-xl font-semibold tracking-[-0.03em] text-slate-950">Selection rationale</h2>
-                <a
-                  href={mission.issue.url ?? "#"}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-sm font-medium text-indigo-600 hover:text-indigo-500"
-                >
-                  View issue
-                </a>
+        {/* ── Hero ── */}
+        <Panel className="overflow-hidden">
+          <div className="border-b border-white/10 bg-[radial-gradient(circle_at_top_right,rgba(99,75,255,0.12),transparent_40%)] px-6 py-6 sm:px-8 sm:py-8">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="space-y-1">
+                <p className="font-mono text-[0.7rem] uppercase tracking-[0.32em] text-[#8B7CFF]">Night Shift Mission</p>
+                <h1 className="font-display text-2xl font-bold tracking-[-0.04em] text-white sm:text-4xl">
+                  {mission.issue.title}
+                </h1>
               </div>
-              <div className="mt-5 grid gap-3 sm:grid-cols-3">
-                <MetricCard label="Why selected" value={mission.selection.rationale} />
-                <MetricCard label="Why now" value={mission.selection.whyNow} />
-                <MetricCard label="Risk note" value={mission.selection.riskNote} />
-              </div>
+              <Link
+                href="/"
+                className="rounded-full border border-white/12 px-4 py-2 font-mono text-[0.72rem] uppercase tracking-[0.2em] text-white/70 transition hover:border-white/24 hover:text-white"
+              >
+                Back to board
+              </Link>
             </div>
 
-            <div className="rounded-[2rem] border border-slate-200 bg-white/90 p-6 shadow-[0_20px_80px_rgba(15,23,42,0.08)]">
-              <h2 className="text-xl font-semibold tracking-[-0.03em] text-slate-950">Recent mission log</h2>
-              <ol className="mt-5 space-y-3">
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Pill tone={mission.riskLevel === "high" ? "red" : "green"}>{mission.riskLevel} risk</Pill>
+              <Pill tone={stateTone(mission.state)}>{mission.state.replaceAll("_", " ")}</Pill>
+              <Pill tone={mission.approval.status === "approved" ? "green" : mission.approval.status === "pending" ? "orange" : "gray"}>
+                {mission.approval.status.replaceAll("_", " ")}
+              </Pill>
+            </div>
+
+            <p className="mt-4 max-w-3xl text-base leading-7 text-white/60">{mission.summary}</p>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Metric label="Issue" value={`#${mission.issue.number}`} />
+              <Metric label="Retry count" value={String(mission.retryCount)} />
+              <Metric label="Branch" value={mission.branch.name ?? "Pending"} />
+              <Metric label="PR URL" value={mission.branch.pullRequestUrl ?? "Pending"} />
+            </div>
+
+            <div className="mt-5">
+              <MissionActions missionId={mission.id} state={mission.state} />
+            </div>
+          </div>
+        </Panel>
+
+        {/* ── Content ── */}
+        <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+          <div className="space-y-4">
+            {/* Selection */}
+            <Panel>
+              <SectionHeader
+                eyebrow="issue selection"
+                title="Selection rationale"
+                right={
+                  <a href={mission.issue.url ?? "#"} target="_blank" rel="noreferrer" className="font-mono text-xs text-[#634BFF] hover:text-[#8B7CFF]">
+                    View issue
+                  </a>
+                }
+              />
+              <div className="grid gap-3 p-5 sm:grid-cols-3 sm:p-6">
+                <Metric label="Why selected" value={mission.selection.rationale} />
+                <Metric label="Why now" value={mission.selection.whyNow} />
+                <Metric label="Risk note" value={mission.selection.riskNote} />
+              </div>
+            </Panel>
+
+            {/* Event log */}
+            <Panel>
+              <SectionHeader eyebrow="mission log" title="Recent events" right={<span className="font-mono text-xs text-slate-500">{events.length} events</span>} />
+              <div className="space-y-px max-h-[500px] overflow-y-auto">
                 {events.map((event) => (
-                  <li key={event.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${pillClasses(event.state)}`}>
-                        {event.state.replaceAll("_", " ")}
-                      </span>
-                      <span className="text-xs uppercase tracking-[0.16em] text-slate-400">{event.type.replaceAll("_", " ")}</span>
+                  <div key={event.id} className="flex items-start gap-4 border-b border-white/6 px-5 py-4 last:border-b-0 sm:px-6">
+                    <Pill tone={stateTone(event.state)}>{event.state.replaceAll("_", " ")}</Pill>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-white/80">{event.message}</p>
+                      <p className="mt-1 font-mono text-[0.65rem] text-slate-500">
+                        {fmt(event.createdAt)} · {event.actor.replaceAll("_", " ")} · {event.type.replaceAll("_", " ")}
+                      </p>
                     </div>
-                    <p className="mt-3 text-sm font-medium text-slate-900">{event.message}</p>
-                    <p className="mt-2 text-xs text-slate-500">
-                      {formatTimestamp(event.createdAt)} · {event.actor.replaceAll("_", " ")}
-                    </p>
-                  </li>
+                  </div>
                 ))}
-              </ol>
-            </div>
+              </div>
+            </Panel>
           </div>
 
-          <aside className="space-y-6">
-            <div className="rounded-[2rem] border border-slate-200 bg-white/90 p-6 shadow-[0_20px_80px_rgba(15,23,42,0.08)]">
-              <h2 className="text-xl font-semibold tracking-[-0.03em] text-slate-950">Approval + execution</h2>
-              <div className="mt-5 grid gap-3">
-                <MetricCard label="Approval status" value={mission.approval.status.replaceAll("_", " ")} />
-                <MetricCard label="Approval channel" value={mission.approval.channel} />
-                <MetricCard label="Requested" value={formatTimestamp(mission.approval.requestedAt)} />
-                <MetricCard label="Resolved" value={formatTimestamp(mission.approval.resolvedAt)} />
-                <MetricCard label="Current state" value={mission.state.replaceAll("_", " ")} />
-                <MetricCard label="Latest action" value={mission.latestAction} />
+          <div className="space-y-4">
+            {/* Approval */}
+            <Panel>
+              <SectionHeader eyebrow="approval gate" title="Approval & execution" />
+              <div className="grid gap-3 p-5 sm:p-6">
+                <Metric label="Approval status" value={mission.approval.status.replaceAll("_", " ")} />
+                <Metric label="Channel" value={mission.approval.channel} />
+                <Metric label="Requested" value={fmt(mission.approval.requestedAt)} />
+                <Metric label="Resolved" value={fmt(mission.approval.resolvedAt)} />
+                <Metric label="Current state" value={mission.state.replaceAll("_", " ")} />
+                <Metric label="Latest action" value={mission.latestAction} />
               </div>
-            </div>
+            </Panel>
 
-            <div className="rounded-[2rem] border border-slate-200 bg-white/90 p-6 shadow-[0_20px_80px_rgba(15,23,42,0.08)]">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-xl font-semibold tracking-[-0.03em] text-slate-950">Checks</h2>
-                <p className="text-sm text-slate-500">
-                  {passedChecks}/{mission.checks.length} passed
-                </p>
-              </div>
-              <ul className="mt-5 space-y-3">
+            {/* Checks */}
+            <Panel>
+              <SectionHeader eyebrow="evaluation" title="Checks" right={<span className="font-mono text-xs text-slate-500">{passedChecks}/{mission.checks.length} passed</span>} />
+              <div className="space-y-3 p-5 sm:p-6">
                 {mission.checks.map((check) => (
-                  <li key={check.id} className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-950">{check.label}</p>
-                        <p className="mt-2 text-sm leading-6 text-slate-600">{check.summary}</p>
-                      </div>
-                      <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${pillClasses(check.status)}`}>
-                        {check.status.replaceAll("_", " ")}
-                      </span>
+                  <div key={check.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-white">{check.label}</p>
+                      <Pill tone={check.status === "passed" ? "green" : check.status === "failed" ? "red" : "gray"}>
+                        {check.status}
+                      </Pill>
                     </div>
-                    <p className="mt-3 text-xs text-slate-500">
-                      {formatTimestamp(check.startedAt)} → {formatTimestamp(check.completedAt)}
+                    <p className="mt-2 text-sm leading-6 text-white/55">{check.summary}</p>
+                    <p className="mt-2 font-mono text-[0.6rem] text-slate-600">
+                      {fmt(check.startedAt)} → {fmt(check.completedAt)}
                     </p>
-                  </li>
+                  </div>
                 ))}
-              </ul>
-            </div>
-          </aside>
-        </section>
+              </div>
+            </Panel>
+          </div>
+        </div>
       </div>
     </main>
   );

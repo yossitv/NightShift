@@ -1,159 +1,124 @@
 import Link from "next/link";
-
 import { listMissionEvents, listMissions } from "@/src/lib/nightshift/store";
-import type { CheckResult, Mission, MissionEvent } from "@/src/lib/nightshift/types";
 import { MissionActions, AutoRefresh } from "./components/MissionActions";
 
 export const dynamic = "force-dynamic";
 
-function formatTimestamp(value: string | null) {
-  if (!value) {
-    return "—";
-  }
+/* ── DeepOps-style primitives ──────────────────────────────── */
 
-  return new Intl.DateTimeFormat("en-US", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
-}
-
-function pillClasses(value: string) {
-  if (value === "high" || value === "failed" || value === "declined") {
-    return "border-rose-200 bg-rose-50 text-rose-700";
-  }
-
-  if (value === "approved" || value === "passed" || value === "queued") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  }
-
-  if (value === "pending" || value === "awaiting_approval" || value === "running") {
-    return "border-amber-200 bg-amber-50 text-amber-700";
-  }
-
-  return "border-slate-200 bg-slate-100 text-slate-700";
-}
-
-function DetailRow({
-  label,
-  value,
-  tone = "light",
-}: {
-  label: string;
-  value: string;
-  tone?: "light" | "dark";
-}) {
+function Panel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-slate-200/70 py-3 last:border-b-0">
-      <dt className={`text-sm ${tone === "dark" ? "text-slate-400" : "text-slate-500"}`}>{label}</dt>
-      <dd className={`max-w-[65%] text-right text-sm font-medium ${tone === "dark" ? "text-slate-100" : "text-slate-900"}`}>
-        {value}
-      </dd>
-    </div>
-  );
-}
-
-function CheckCard({ check }: { check: CheckResult }) {
-  return (
-    <li className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between gap-3">
-        <p className="font-medium text-slate-950">{check.label}</p>
-        <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${pillClasses(check.status)}`}>
-          {check.status.replaceAll("_", " ")}
-        </span>
-      </div>
-      <p className="mt-3 text-sm leading-6 text-slate-600">{check.summary}</p>
-      <div className="mt-3 grid gap-2 text-xs text-slate-500 sm:grid-cols-2">
-        <p>Started: {formatTimestamp(check.startedAt)}</p>
-        <p>Completed: {formatTimestamp(check.completedAt)}</p>
-      </div>
-    </li>
-  );
-}
-
-function EventItem({ event }: { event: MissionEvent }) {
-  return (
-    <li className="rounded-2xl border border-slate-200/80 bg-white/80 p-4 shadow-sm">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold capitalize ${pillClasses(event.state)}`}>
-          {event.state.replaceAll("_", " ")}
-        </span>
-        <span className="text-xs uppercase tracking-[0.16em] text-slate-400">{event.type.replaceAll("_", " ")}</span>
-      </div>
-      <p className="mt-3 text-sm font-medium text-slate-900">{event.message}</p>
-      <p className="mt-2 text-xs text-slate-500">
-        {formatTimestamp(event.createdAt)} · {event.actor.replaceAll("_", " ")}
-      </p>
-    </li>
-  );
-}
-
-function MissionHero({ mission }: { mission: Mission }) {
-  return (
-    <section className="rounded-[2rem] border border-slate-200 bg-white/90 p-8 shadow-[0_20px_80px_rgba(15,23,42,0.08)]">
-      <div className="flex flex-wrap items-center gap-3">
-        <span className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-indigo-700">
-          Mission Control
-        </span>
-        <span className={`rounded-full border px-3 py-1 text-xs font-semibold capitalize ${pillClasses(mission.state)}`}>
-          {mission.state.replaceAll("_", " ")}
-        </span>
-        <span className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] ${pillClasses(mission.riskLevel)}`}>
-          {mission.riskLevel} risk
-        </span>
-      </div>
-
-      <div className="mt-6 space-y-4">
-        <p className="text-sm uppercase tracking-[0.16em] text-slate-500">
-          #{mission.issue.number} · {mission.issue.owner}/{mission.issue.repo}
-        </p>
-        <h1 className="max-w-4xl text-4xl font-semibold tracking-[-0.04em] text-slate-950 md:text-6xl">
-          {mission.issue.title}
-        </h1>
-        <p className="max-w-3xl text-lg leading-8 text-slate-600">{mission.summary}</p>
-      </div>
-
-      <dl className="mt-8 grid gap-4 rounded-[1.5rem] border border-slate-200 bg-slate-50 px-5 py-4 md:grid-cols-2 xl:grid-cols-4">
-        <DetailRow label="Mission ID" value={mission.id} />
-        <DetailRow label="Approval" value={mission.approval.status.replaceAll("_", " ")} />
-        <DetailRow label="Latest action" value={mission.latestAction} />
-        <DetailRow label="Updated" value={formatTimestamp(mission.updatedAt)} />
-      </dl>
-
-      <div className="mt-6 flex flex-wrap items-center gap-3">
-        <Link
-          href={`/missions/${mission.id}`}
-          className="rounded-full bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800"
-        >
-          Open mission detail
-        </Link>
-        <a
-          href={mission.issue.url ?? "#"}
-          target="_blank"
-          rel="noreferrer"
-          className="rounded-full border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:border-indigo-200 hover:text-indigo-600"
-        >
-          View source issue
-        </a>
-      </div>
+    <section className={`rounded-[1.75rem] border border-white/15 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.02))] shadow-[0_0_0_1px_rgba(0,212,255,0.05)] ${className}`}>
+      {children}
     </section>
   );
 }
 
+function SectionHeader({ eyebrow, title, right }: { eyebrow: string; title: string; right?: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between border-b border-white/10 px-5 py-4 sm:px-6">
+      <div className="space-y-1">
+        <p className="font-mono text-[0.7rem] uppercase tracking-[0.32em] text-cyan-200/70">{eyebrow}</p>
+        <h2 className="text-lg font-semibold text-white">{title}</h2>
+      </div>
+      {right}
+    </div>
+  );
+}
+
+function Pill({ tone = "gray", children }: { tone?: "cyan" | "green" | "orange" | "red" | "gray" | "purple"; children: React.ReactNode }) {
+  const colors = {
+    cyan: "border-cyan-300/35 bg-cyan-300/10 text-cyan-100",
+    green: "border-emerald-300/35 bg-emerald-300/10 text-emerald-100",
+    orange: "border-orange-300/35 bg-orange-300/10 text-orange-100",
+    red: "border-red-300/35 bg-red-300/10 text-red-100",
+    gray: "border-white/15 bg-white/5 text-slate-200",
+    purple: "border-[#634BFF]/35 bg-[#634BFF]/10 text-[#a594ff]",
+  };
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 font-mono text-[0.68rem] uppercase tracking-[0.2em] ${colors[tone]}`}>
+      {children}
+    </span>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3">
+      <p className="font-mono text-[0.68rem] uppercase tracking-[0.28em] text-slate-500">{label}</p>
+      <p className="mt-2 text-sm text-white break-all">{value}</p>
+    </div>
+  );
+}
+
+function stateTone(s: string): "cyan" | "green" | "orange" | "red" | "gray" | "purple" {
+  if (s === "pr_opened") return "green";
+  if (s === "failed" || s === "declined" || s === "canceled") return "red";
+  if (s === "awaiting_approval" || s === "retrying") return "orange";
+  if (s === "planning" || s === "coding" || s === "testing") return "cyan";
+  if (s === "queued" || s === "candidate_selected") return "purple";
+  return "gray";
+}
+
+function fmt(value: string | null) {
+  if (!value) return "—";
+  return new Intl.DateTimeFormat("en-US", { dateStyle: "medium", timeStyle: "short" }).format(new Date(value));
+}
+
+/* ── Pipeline stages visualization ─────────────────────────── */
+
+const PIPELINE = [
+  { key: "candidate_selected", label: "Selected", color: "#634BFF" },
+  { key: "awaiting_approval", label: "Approval", color: "#FF9900" },
+  { key: "queued", label: "Queued", color: "#634BFF" },
+  { key: "planning", label: "Planning", color: "#00B4D8" },
+  { key: "coding", label: "Coding", color: "#00B4D8" },
+  { key: "testing", label: "Testing", color: "#EB5424" },
+  { key: "pr_opened", label: "PR Opened", color: "#10B981" },
+] as const;
+
+function PipelineBar({ current }: { current: string }) {
+  const idx = PIPELINE.findIndex((s) => s.key === current);
+  return (
+    <div className="flex items-center gap-1 overflow-x-auto py-2">
+      {PIPELINE.map((stage, i) => {
+        const active = i <= idx && idx >= 0;
+        return (
+          <div key={stage.key} className="flex items-center gap-1">
+            <div
+              className="h-2 w-12 rounded-full transition-colors sm:w-16"
+              style={{ backgroundColor: active ? stage.color : "rgba(255,255,255,0.08)" }}
+            />
+            <span className={`hidden font-mono text-[0.6rem] uppercase tracking-[0.16em] sm:inline ${active ? "text-white/70" : "text-white/25"}`}>
+              {stage.label}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ── Page ───────────────────────────────────────────────────── */
+
 export default async function Home() {
   const missions = await listMissions();
   const mission = missions[0] ?? null;
-  const events = mission ? (await listMissionEvents(mission.id)).slice(0, 6) : [];
+  const events = mission ? (await listMissionEvents(mission.id)).slice(0, 8) : [];
 
   if (!mission) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-slate-950 px-6 py-24 text-slate-50">
-        <div className="max-w-xl rounded-[2rem] border border-white/10 bg-white/5 p-10 text-center shadow-2xl">
-          <p className="text-sm uppercase tracking-[0.18em] text-slate-400">Night Shift</p>
-          <h1 className="mt-4 text-4xl font-semibold">No active mission.</h1>
-          <p className="mt-4 text-base leading-7 text-slate-300">
-            Select an issue from the configured repository to start a new mission.
+      <main className="flex min-h-screen items-center justify-center px-6 py-24">
+        <div className="max-w-xl rounded-[2rem] border border-white/10 bg-white/[0.03] p-10 text-center">
+          <div className="mb-4 inline-flex items-center gap-3 rounded-full border border-[#634BFF]/25 bg-[#634BFF]/6 px-5 py-2.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-[#634BFF]" />
+            <span className="font-mono text-[0.72rem] uppercase tracking-[0.38em] text-[#8B7CFF]">Night Shift</span>
+          </div>
+          <h1 className="mt-4 font-display text-4xl font-bold">No active mission.</h1>
+          <p className="mt-4 text-base leading-7 text-white/60">
+            Select an issue from the configured repository to start a new autonomous mission.
           </p>
-          <div className="mt-6">
+          <div className="mt-8">
             <MissionActions missionId={null} state={null} />
           </div>
         </div>
@@ -162,97 +127,149 @@ export default async function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(99,102,241,0.18),_transparent_30%),linear-gradient(180deg,_#f8fafc_0%,_#eef2ff_42%,_#e2e8f0_100%)] px-6 py-10 text-slate-900">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-8">
-        <AutoRefresh interval={3000} />
-        <MissionHero mission={mission} />
-        <MissionActions missionId={mission.id} state={mission.state} />
+    <main className="min-h-screen px-3 py-3 sm:px-4">
+      <AutoRefresh interval={3000} />
 
-        <section className="grid gap-8 xl:grid-cols-[1.2fr_0.8fr]">
-          <div className="space-y-8">
-            <div className="rounded-[2rem] border border-slate-200 bg-white/85 p-7 shadow-[0_20px_80px_rgba(15,23,42,0.08)]">
-              <div className="flex items-center justify-between gap-4">
-                <h2 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">Selection rationale</h2>
-                <span className="rounded-full border border-slate-200 bg-slate-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-600">
-                  deterministic local store
-                </span>
+      <div className="mx-auto max-w-[1400px] space-y-4">
+        {/* ── Header bar ── */}
+        <div className="flex h-16 items-center justify-between rounded-2xl border border-[#634BFF]/30 bg-black px-6">
+          <div className="font-display text-xl font-black uppercase tracking-[-0.03em] text-[#634BFF]">
+            Night Shift
+          </div>
+          <div className="hidden items-center gap-4 md:flex">
+            <PipelineBar current={mission.state} />
+          </div>
+          <div className="flex items-center gap-3">
+            <Pill tone={stateTone(mission.state)}>{mission.state.replaceAll("_", " ")}</Pill>
+            <Pill tone={mission.riskLevel === "high" ? "red" : "green"}>{mission.riskLevel} risk</Pill>
+          </div>
+        </div>
+
+        {/* ── Hero section ── */}
+        <Panel>
+          <div className="px-6 py-6 sm:px-8 sm:py-8">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="space-y-3">
+                <p className="font-mono text-[0.72rem] uppercase tracking-[0.34em] text-white/42">
+                  #{mission.issue.number} · {mission.issue.owner}/{mission.issue.repo}
+                </p>
+                <h1 className="font-display text-3xl font-bold tracking-[-0.04em] text-white sm:text-5xl">
+                  {mission.issue.title}
+                </h1>
+                <p className="max-w-3xl text-base leading-7 text-white/60">{mission.summary}</p>
               </div>
-              <div className="mt-6 grid gap-5 md:grid-cols-3">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-sm font-medium text-slate-500">Why selected</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-800">{mission.selection.rationale}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-sm font-medium text-slate-500">Why now</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-800">{mission.selection.whyNow}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-                  <p className="text-sm font-medium text-slate-500">Risk note</p>
-                  <p className="mt-2 text-sm leading-6 text-slate-800">{mission.selection.riskNote}</p>
-                </div>
-              </div>
+              <Link
+                href={`/missions/${mission.id}`}
+                className="rounded-full border border-white/12 px-4 py-2 font-mono text-[0.72rem] uppercase tracking-[0.2em] text-white/70 transition hover:border-white/24 hover:text-white"
+              >
+                Detail View
+              </Link>
             </div>
 
-            <div className="rounded-[2rem] border border-slate-200 bg-white/85 p-7 shadow-[0_20px_80px_rgba(15,23,42,0.08)]">
-              <h2 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">Acceptance criteria</h2>
-              <ul className="mt-5 space-y-3">
-                {mission.acceptanceCriteria.map((item) => (
-                  <li key={item} className="rounded-2xl border border-emerald-100 bg-emerald-50/70 px-4 py-3 text-sm leading-6 text-emerald-950">
-                    {item}
-                  </li>
-                ))}
-              </ul>
-
-              <h3 className="mt-8 text-lg font-semibold text-slate-900">Non-goals</h3>
-              <ul className="mt-4 flex flex-wrap gap-3">
-                {mission.nonGoals.map((item) => (
-                  <li key={item} className="rounded-full border border-slate-200 bg-slate-100 px-3 py-2 text-sm text-slate-700">
-                    {item}
-                  </li>
-                ))}
-              </ul>
+            <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <Metric label="Mission ID" value={mission.id} />
+              <Metric label="Approval" value={mission.approval.status.replaceAll("_", " ")} />
+              <Metric label="Retry count" value={String(mission.retryCount)} />
+              <Metric label="Updated" value={fmt(mission.updatedAt)} />
             </div>
 
-            <div className="rounded-[2rem] border border-slate-200 bg-white/85 p-7 shadow-[0_20px_80px_rgba(15,23,42,0.08)]">
-              <div className="flex items-center justify-between gap-4">
-                <h2 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">Recent mission events</h2>
-                <p className="text-sm text-slate-500">{events.length} stored events</p>
-              </div>
-              <ul className="mt-5 space-y-4">
-                {events.map((event) => (
-                  <EventItem key={event.id} event={event} />
-                ))}
-              </ul>
+            <div className="mt-6">
+              <MissionActions missionId={mission.id} state={mission.state} />
             </div>
           </div>
+        </Panel>
 
-          <aside className="space-y-8">
-            <div className="rounded-[2rem] border border-slate-200 bg-slate-950 p-7 text-slate-100 shadow-[0_20px_80px_rgba(15,23,42,0.18)]">
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-slate-400">Approval & branch</p>
-              <dl className="mt-5 space-y-4">
-                <DetailRow label="Approval status" value={mission.approval.status.replaceAll("_", " ")} tone="dark" />
-                <DetailRow label="Approval channel" value={mission.approval.channel} tone="dark" />
-                <DetailRow label="Requested" value={formatTimestamp(mission.approval.requestedAt)} tone="dark" />
-                <DetailRow label="Resolved" value={formatTimestamp(mission.approval.resolvedAt)} tone="dark" />
-                <DetailRow label="Retry count" value={String(mission.retryCount)} tone="dark" />
-                <DetailRow label="Branch" value={mission.branch.name ?? "Not created"} tone="dark" />
-                <DetailRow label="PR URL" value={mission.branch.pullRequestUrl ?? "Not opened"} tone="dark" />
-              </dl>
-            </div>
-
-            <div className="rounded-[2rem] border border-slate-200 bg-white/85 p-7 shadow-[0_20px_80px_rgba(15,23,42,0.08)]">
-              <div className="flex items-center justify-between gap-4">
-                <h2 className="text-2xl font-semibold tracking-[-0.03em] text-slate-950">Checks summary</h2>
-                <p className="text-sm text-slate-500">{mission.checks.length} checks</p>
+        {/* ── Content grid ── */}
+        <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+          <div className="space-y-4">
+            {/* Selection rationale */}
+            <Panel>
+              <SectionHeader eyebrow="issue selection" title="Selection rationale" />
+              <div className="grid gap-3 p-5 sm:grid-cols-3 sm:p-6">
+                <Metric label="Why selected" value={mission.selection.rationale} />
+                <Metric label="Why now" value={mission.selection.whyNow} />
+                <Metric label="Risk note" value={mission.selection.riskNote} />
               </div>
-              <ul className="mt-5 space-y-4">
-                {mission.checks.map((check) => (
-                  <CheckCard key={check.id} check={check} />
+            </Panel>
+
+            {/* Acceptance criteria */}
+            <Panel>
+              <SectionHeader eyebrow="mission scope" title="Acceptance criteria" />
+              <div className="space-y-2 p-5 sm:p-6">
+                {mission.acceptanceCriteria.map((item) => (
+                  <div key={item} className="flex gap-3">
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-400" />
+                    <p className="text-sm leading-7 text-white/65">{item}</p>
+                  </div>
                 ))}
-              </ul>
-            </div>
-          </aside>
-        </section>
+                {mission.nonGoals.length > 0 && (
+                  <>
+                    <p className="mt-4 font-mono text-[0.68rem] uppercase tracking-[0.28em] text-slate-500">Non-goals</p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {mission.nonGoals.map((item) => (
+                        <Pill key={item} tone="gray">{item}</Pill>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            </Panel>
+
+            {/* Event log */}
+            <Panel>
+              <SectionHeader eyebrow="mission log" title="Recent events" right={<span className="font-mono text-xs text-slate-500">{events.length} events</span>} />
+              <div className="space-y-px">
+                {events.map((event) => (
+                  <div key={event.id} className="flex items-start gap-4 border-b border-white/6 px-5 py-4 last:border-b-0 sm:px-6">
+                    <Pill tone={stateTone(event.state)}>{event.state.replaceAll("_", " ")}</Pill>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm text-white/80">{event.message}</p>
+                      <p className="mt-1 font-mono text-[0.65rem] text-slate-500">
+                        {fmt(event.createdAt)} · {event.actor.replaceAll("_", " ")} · {event.type.replaceAll("_", " ")}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          </div>
+
+          <div className="space-y-4">
+            {/* Approval & branch */}
+            <Panel>
+              <SectionHeader eyebrow="approval gate" title="Approval & branch" />
+              <div className="grid gap-3 p-5 sm:p-6">
+                <Metric label="Approval status" value={mission.approval.status.replaceAll("_", " ")} />
+                <Metric label="Channel" value={mission.approval.channel} />
+                <Metric label="Requested" value={fmt(mission.approval.requestedAt)} />
+                <Metric label="Resolved" value={fmt(mission.approval.resolvedAt)} />
+                <Metric label="Branch" value={mission.branch.name ?? "Not created"} />
+                <Metric label="PR URL" value={mission.branch.pullRequestUrl ?? "Not opened"} />
+              </div>
+            </Panel>
+
+            {/* Checks */}
+            <Panel>
+              <SectionHeader eyebrow="evaluation" title="Checks summary" right={<span className="font-mono text-xs text-slate-500">{mission.checks.filter((c) => c.status === "passed").length}/{mission.checks.length} passed</span>} />
+              <div className="space-y-3 p-5 sm:p-6">
+                {mission.checks.map((check) => (
+                  <div key={check.id} className="rounded-2xl border border-white/10 bg-black/20 p-4">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-sm font-semibold text-white">{check.label}</p>
+                      <Pill tone={check.status === "passed" ? "green" : check.status === "failed" ? "red" : "gray"}>
+                        {check.status}
+                      </Pill>
+                    </div>
+                    <p className="mt-2 text-sm leading-6 text-white/55">{check.summary}</p>
+                    <p className="mt-2 font-mono text-[0.6rem] text-slate-600">
+                      {fmt(check.startedAt)} → {fmt(check.completedAt)}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </Panel>
+          </div>
+        </div>
       </div>
     </main>
   );
