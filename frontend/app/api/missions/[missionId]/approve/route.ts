@@ -1,6 +1,7 @@
 // POST /api/missions/:missionId/approve — Manual approval fallback (SPEC.md §19)
 
 import { getMission, updateMissionState } from "@/src/lib/nightshift/store";
+import { runMission } from "@/lib/runner-core";
 
 export const dynamic = "force-dynamic";
 
@@ -23,8 +24,13 @@ export async function POST(
   const updated = await updateMissionState(
     missionId,
     "queued",
-    "Mission approved (manual fallback)."
+    "Mission approved (manual). Auto-starting runner."
   );
+
+  // Auto-start the runner after approval
+  runMission(missionId).catch((err) => {
+    console.error("Runner error after manual approve:", err);
+  });
 
   return Response.json({ mission: updated });
 }
