@@ -13,3 +13,5 @@
 .env
 .data/
 frontend/.data/
+.next/
+frontend/.next/

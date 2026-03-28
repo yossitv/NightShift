@@ -217,6 +217,7 @@ type MissionEntry = {
   state: string;
   issue: { number: number };
   riskLevel: string;
+  approval: { status: string; channel: string };
 };
 
 function DecisionBadge({ decision }: { decision: string }) {
@@ -364,9 +365,10 @@ export function LiveIssueList({ interval = 5000 }: { interval?: number }) {
           return (
             <div
               key={issue.number}
-              className={`flex items-center justify-between gap-4 border-b border-white/6 px-5 py-4 last:border-b-0 sm:px-6 transition-colors duration-700 ${
+              className={`flex items-center justify-between gap-4 border-b border-white/6 px-5 py-4 last:border-b-0 sm:px-6 transition-colors duration-700 cursor-pointer hover:bg-white/[0.03] ${
                 isNew ? "bg-cyan-400/10" : pendingEntry?.decision === "declined" ? "bg-red-400/5" : ""
               }`}
+              onClick={() => router.push(`/issues/${issue.number}`)}
             >
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 flex-wrap">
@@ -378,6 +380,9 @@ export function LiveIssueList({ interval = 5000 }: { interval?: number }) {
                     </span>
                   )}
                   {pendingEntry && <DecisionBadge decision={pendingEntry.decision} />}
+                  {!pendingEntry && missionEntry?.approval?.status === "approved" && <DecisionBadge decision="approved" />}
+                  {!pendingEntry && missionEntry?.approval?.status === "declined" && <DecisionBadge decision="declined" />}
+                  {!pendingEntry && missionEntry?.state === "awaiting_approval" && !missionEntry?.approval?.status?.includes("approved") && <DecisionBadge decision="pending" />}
                   {missionEntry && <MissionBadge state={missionEntry.state} />}
                 </div>
                 {issue.labels?.length > 0 && (
@@ -393,7 +398,9 @@ export function LiveIssueList({ interval = 5000 }: { interval?: number }) {
                   </div>
                 )}
               </div>
-              <IssueSelectButton issueNumber={issue.number} />
+              <div onClick={(e) => e.stopPropagation()}>
+                <IssueSelectButton issueNumber={issue.number} />
+              </div>
             </div>
           );
         })}

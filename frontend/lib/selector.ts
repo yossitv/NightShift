@@ -48,7 +48,7 @@ function score(issue: GitHubIssue): number {
   return s;
 }
 
-function classifyRisk(issue: GitHubIssue): { level: RiskLevel; note: string } {
+export function classifyRisk(issue: GitHubIssue): { level: RiskLevel; note: string } {
   const text = `${issue.title} ${issue.body ?? ""}`.toLowerCase();
 
   const highRiskPatterns = [

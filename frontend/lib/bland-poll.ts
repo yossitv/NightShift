@@ -58,7 +58,7 @@ export async function pollBlandCall(callId: string, missionId: string) {
       }
 
       console.log(`Bland call ${callId} completed. Decision: ${decision}. Duration: ${data.call_length}s`);
-      console.log(`Transcript: ${transcript.slice(0, 300)}`);
+      console.log(`Transcript: ${rawTranscript.slice(0, 300)}`);
 
       if (decision === "approved") {
         await updateMissionState(missionId, "queued", "Mission approved via voice call.");
@@ -67,7 +67,7 @@ export async function pollBlandCall(callId: string, missionId: string) {
           type: "approval_resolved",
           state: "queued",
           message: `Approved via voice call (${data.call_length}s). Auto-starting runner.`,
-          metadata: { callId, transcript: transcript.slice(0, 200) },
+          metadata: { callId, transcript: rawTranscript.slice(0, 200) },
         });
 
         // Auto-start the runner after approval
@@ -81,7 +81,7 @@ export async function pollBlandCall(callId: string, missionId: string) {
           type: "approval_resolved",
           state: "declined",
           message: `Declined via voice call (${data.call_length}s). Closing issue.`,
-          metadata: { callId, transcript: transcript.slice(0, 200) },
+          metadata: { callId, transcript: rawTranscript.slice(0, 200) },
         });
 
         // Close the GitHub issue
@@ -89,7 +89,7 @@ export async function pollBlandCall(callId: string, missionId: string) {
         if (m) {
           await closeIssue(
             m.issue.number,
-            `**Night Shift — Mission Declined**\n\nThis issue was declined via voice approval.\n\n> ${transcript.slice(0, 300)}\n\n_Closed automatically by Night Shift._`
+            `**Night Shift — Mission Declined**\n\nThis issue was declined via voice approval.\n\n> ${rawTranscript.slice(0, 300)}\n\n_Closed automatically by Night Shift._`
           ).catch((err) => console.error("Failed to close issue:", err));
         }
       } else {
@@ -98,7 +98,7 @@ export async function pollBlandCall(callId: string, missionId: string) {
           type: "note_logged",
           state: "awaiting_approval",
           message: `Voice call completed but no clear decision. Manual approval required.`,
-          metadata: { callId, transcript: transcript.slice(0, 200) },
+          metadata: { callId, transcript: rawTranscript.slice(0, 200) },
         });
       }
 

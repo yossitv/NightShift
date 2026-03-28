@@ -17,7 +17,7 @@ export async function requestVoiceApproval(
     try {
       const blandPayload = {
           phone_number: payload.phoneNumber,
-          task: `You are Night Shift. A high-risk mission needs your approval: ${payload.issueTitle}. ${payload.riskNote.replace(/\\/g, '')}. Do you approve? Say yes or no.`,
+          task: `You are Night Shift, an autonomous coding agent. You are calling the operator to request approval for a high-risk mission. The mission is: ${payload.issueTitle}. ${payload.riskNote.replace(/\\/g, '')}. Ask the operator if they approve this mission. Wait for their answer. Do NOT say "yes" or "approve" yourself — only the operator can approve. Just describe the mission and ask for their decision.`,
           voice: "mason",
           wait_for_greeting: true,
           max_duration: 60,

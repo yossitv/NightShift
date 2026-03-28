@@ -22,14 +22,21 @@ export async function POST(req: Request) {
   }
 
   // Parse Bland AI transcript for approval/decline/defer keywords
-  const transcript = (body?.concatenated_transcript ?? body?.transcript ?? "").toLowerCase();
+  // Only analyze USER's lines — the AI assistant may say "approve" in its prompt
+  const rawTranscript = (body?.concatenated_transcript ?? body?.transcript ?? "").toLowerCase();
+  const userLines = rawTranscript
+    .split("\n")
+    .filter((line: string) => line.trim().startsWith("user:"))
+    .map((line: string) => line.replace(/^user:\s*/i, ""))
+    .join(" ");
   let decision: "approved" | "declined" | "deferred" = "deferred";
 
-  if (/\b(yes|approve|proceed|go ahead|do it)\b/.test(transcript)) {
-    decision = "approved";
-  } else if (/\b(no|decline|reject|stop|cancel)\b/.test(transcript)) {
+  // Check decline first — explicit rejection takes priority
+  if (/\b(no|not approved|decline|reject|stop|cancel|declined|don't|do not)\b/.test(userLines)) {
     decision = "declined";
-  } else if (/\b(later|defer|hold|wait|not now)\b/.test(transcript)) {
+  } else if (/\b(yes|approve|proceed|go ahead|do it|approved)\b/.test(userLines)) {
+    decision = "approved";
+  } else if (/\b(later|defer|hold|wait|not now)\b/.test(userLines)) {
     decision = "deferred";
   }
 
@@ -44,7 +51,7 @@ export async function POST(req: Request) {
       type: "note_logged",
       state: "awaiting_approval",
       message: "Voice call deferred — mission stays in awaiting_approval. Manual approval available.",
-      metadata: { callId: body?.call_id, transcript: transcript.slice(0, 200) },
+      metadata: { callId: body?.call_id, transcript: rawTranscript.slice(0, 200) },
     });
   }
 
