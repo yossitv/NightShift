@@ -1,8 +1,9 @@
 import Link from "next/link";
-import { readMissionStore, listMissionEvents } from "@/src/lib/nightshift/store";
+import { readMissionStore } from "@/src/lib/nightshift/store";
 import { REPO_CONFIG } from "@/lib/config";
 import { isCodexAvailable } from "@/lib/codex";
 import type { Mission, MissionEvent, CheckResult } from "@/src/lib/nightshift/types";
+import { IssueSelectButton } from "../components/MissionActions";
 
 export const dynamic = "force-dynamic";
 
@@ -65,6 +66,28 @@ export default async function OverviewPage() {
   const missions = store.missions.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   const allEvents = store.events.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 
+  // Fetch GitHub issues
+  type GHIssue = { number: number; title: string; state: string; labels: { name: string }[]; created_at: string; html_url: string };
+  let ghIssues: GHIssue[] = [];
+  try {
+    const headers: Record<string, string> = { Accept: "application/vnd.github+json" };
+    if (REPO_CONFIG.githubToken) headers.Authorization = `Bearer ${REPO_CONFIG.githubToken}`;
+    const res = await fetch(
+      `https://api.github.com/repos/${REPO_CONFIG.owner}/${REPO_CONFIG.name}/issues?state=all&per_page=50&sort=created&direction=desc`,
+      { headers, cache: "no-store" }
+    );
+    if (res.ok) {
+      const raw = (await res.json()) as Array<Record<string, unknown>>;
+      ghIssues = raw.filter((i) => !i.pull_request) as unknown as GHIssue[];
+    }
+  } catch { /* ignore */ }
+
+  // Map issue number → mission
+  const issueMissionMap = new Map<number, Mission>();
+  for (const m of missions) {
+    issueMissionMap.set(m.issue.number, m);
+  }
+
   // System stats
   const total = missions.length;
   const active = missions.filter((m) => !["pr_opened", "failed", "canceled", "declined"].includes(m.state)).length;
@@ -114,6 +137,54 @@ export default async function OverviewPage() {
           <MetricCard label="Succeeded (PR)" value={String(succeeded)} tone={succeeded > 0 ? "green" : "gray"} />
           <MetricCard label="Failed" value={String(failed)} tone={failed > 0 ? "red" : "gray"} />
         </div>
+
+        {/* ── GitHub Issues ── */}
+        {ghIssues.length > 0 && (
+          <Panel>
+            <Header
+              eyebrow={`${REPO_CONFIG.owner}/${REPO_CONFIG.name}`}
+              title="GitHub Issues"
+              right={<span className="font-mono text-xs text-slate-500">{ghIssues.length} issues</span>}
+            />
+            <div className="divide-y divide-white/6">
+              {ghIssues.map((issue) => {
+                const mission = issueMissionMap.get(issue.number);
+                return (
+                  <div key={issue.number} className="flex items-center gap-4 px-5 py-3 sm:px-6">
+                    <span className="w-10 shrink-0 font-mono text-[0.68rem] text-slate-500">#{issue.number}</span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <a href={issue.html_url} target="_blank" rel="noreferrer" className="text-sm font-medium text-white hover:text-[#634BFF]">
+                          {issue.title}
+                        </a>
+                        <Pill tone={issue.state === "open" ? "green" : "gray"}>{issue.state}</Pill>
+                        {issue.labels?.map((l) => (
+                          <Pill key={l.name} tone="gray">{l.name}</Pill>
+                        ))}
+                      </div>
+                      <p className="mt-0.5 font-mono text-[0.6rem] text-slate-600">
+                        {new Date(issue.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      </p>
+                    </div>
+                    {mission ? (
+                      <div className="flex items-center gap-2">
+                        <Pill tone={stateTone(mission.state)}>{mission.state.replaceAll("_", " ")}</Pill>
+                        <Link
+                          href={`/missions/${mission.id}`}
+                          className="font-mono text-[0.6rem] text-[#634BFF] hover:text-white"
+                        >
+                          {mission.id}
+                        </Link>
+                      </div>
+                    ) : (
+                      issue.state === "open" && <IssueSelectButton issueNumber={issue.number} />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </Panel>
+        )}
 
         {/* ── All missions ── */}
         <Panel>

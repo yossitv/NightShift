@@ -41,13 +41,20 @@ export async function pollBlandCall(callId: string, missionId: string) {
       if (!data.completed) continue;
 
       // Call completed — parse transcript for decision
-      const transcript = (data.concatenated_transcript ?? "").toLowerCase();
+      // Only analyze the USER's lines, not the AI assistant's lines
+      const rawTranscript = (data.concatenated_transcript ?? "").toLowerCase();
+      const userLines = rawTranscript
+        .split("\n")
+        .filter((line) => line.trim().startsWith("user:"))
+        .map((line) => line.replace(/^user:\s*/i, ""))
+        .join(" ");
       let decision: "approved" | "declined" | "deferred" = "deferred";
 
-      if (/\b(yes|approve|proceed|go ahead|do it|approved)\b/.test(transcript)) {
-        decision = "approved";
-      } else if (/\b(no|decline|reject|stop|cancel|declined)\b/.test(transcript)) {
+      // Check decline first — user explicitly rejecting takes priority
+      if (/\b(no|not approved|decline|reject|stop|cancel|declined|don't|do not)\b/.test(userLines)) {
         decision = "declined";
+      } else if (/\b(yes|approve|proceed|go ahead|do it|approved)\b/.test(userLines)) {
+        decision = "approved";
       }
 
       console.log(`Bland call ${callId} completed. Decision: ${decision}. Duration: ${data.call_length}s`);
