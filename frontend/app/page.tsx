@@ -184,6 +184,12 @@ export default async function Home() {
             <PipelineBar current={mission.state} />
           </div>
           <div className="flex items-center gap-3">
+            <Link
+              href="/overview"
+              className="rounded-full border border-white/12 px-3 py-1.5 font-mono text-[0.65rem] uppercase tracking-[0.2em] text-white/50 transition hover:text-white"
+            >
+              Overview
+            </Link>
             <Pill tone={stateTone(mission.state)}>{mission.state.replaceAll("_", " ")}</Pill>
             <Pill tone={mission.riskLevel === "high" ? "red" : "green"}>{mission.riskLevel} risk</Pill>
           </div>

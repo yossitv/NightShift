@@ -91,12 +91,20 @@ export default async function MissionPage({ params }: { params: Promise<{ missio
                   {mission.issue.title}
                 </h1>
               </div>
-              <Link
-                href="/"
-                className="rounded-full border border-white/12 px-4 py-2 font-mono text-[0.72rem] uppercase tracking-[0.2em] text-white/70 transition hover:border-white/24 hover:text-white"
-              >
-                Back to board
-              </Link>
+              <div className="flex items-center gap-2">
+                <Link
+                  href="/overview"
+                  className="rounded-full border border-white/12 px-4 py-2 font-mono text-[0.72rem] uppercase tracking-[0.2em] text-white/50 transition hover:text-white"
+                >
+                  Overview
+                </Link>
+                <Link
+                  href="/"
+                  className="rounded-full border border-white/12 px-4 py-2 font-mono text-[0.72rem] uppercase tracking-[0.2em] text-white/70 transition hover:border-white/24 hover:text-white"
+                >
+                  Dashboard
+                </Link>
+              </div>
             </div>
 
             <div className="mt-4 flex flex-wrap gap-2">
