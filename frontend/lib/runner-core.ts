@@ -68,6 +68,7 @@ export async function runMission(missionId: string) {
 
     // ── 2. Coding loop (with retry) ──
     const maxRetries = 3;
+    let lastFailureContext: string | null = null;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       checkTimeout();
@@ -82,12 +83,16 @@ export async function runMission(missionId: string) {
 
       // Execute coding agent (Codex CLI or simulated fallback)
       if (repoPath && isCodexAvailable()) {
-        const codexResult = await runCodex(repoPath, {
-          issueNumber: mission.issue.number,
-          issueTitle: mission.issue.title,
-          summary: mission.summary,
-          acceptanceCriteria: mission.acceptanceCriteria,
-        });
+        const codexResult = await runCodex(
+          repoPath,
+          {
+            issueNumber: mission.issue.number,
+            issueTitle: mission.issue.title,
+            summary: mission.summary,
+            acceptanceCriteria: mission.acceptanceCriteria,
+          },
+          lastFailureContext,
+        );
 
         await appendMissionEvent(missionId, {
           actor: "runner",
@@ -144,7 +149,7 @@ export async function runMission(missionId: string) {
         : { id: "check_lint", label: "Lint", status: "passed" as const, summary: "Lint passed (simulated).", startedAt: new Date().toISOString(), completedAt: new Date().toISOString() };
 
       const diffSummary = repoPath ? getDiffSummary() : "simulated diff";
-      const reqResult = runRequirementsCheck(mission.acceptanceCriteria, diffSummary);
+      const reqResult = runRequirementsCheck(mission.acceptanceCriteria, diffSummary, repoPath || undefined);
 
       await upsertMissionCheck(missionId, testsResult);
       await upsertMissionCheck(missionId, lintResult);
@@ -168,6 +173,12 @@ export async function runMission(missionId: string) {
         .join(", ");
 
       if (attempt < maxRetries) {
+        // §16.8: Capture failure context for next coding pass
+        lastFailureContext = [testsResult, lintResult, reqResult]
+          .filter((c) => c.status === "failed")
+          .map((c) => `[${c.label}] ${c.summary}`)
+          .join("\n");
+
         await incrementRetryCount(missionId);
         await updateMissionState(missionId, "retrying", `Checks failed (${failedNames}). Retrying...`);
         await appendMissionEvent(missionId, {

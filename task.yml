@@ -20,7 +20,7 @@ tasks:
   - id: NS-01
     title: Mission model and local persistence
     priority: P0
-    status: todo
+    status: done
     depends_on: []
     spec_refs:
       - "11 MVP Architecture"
@@ -45,7 +45,7 @@ tasks:
   - id: NS-02
     title: Open issue fetch API
     priority: P0
-    status: todo
+    status: done
     depends_on:
       - NS-01
     spec_refs:
@@ -70,7 +70,7 @@ tasks:
   - id: NS-03
     title: Automatic issue selection and risk scoring
     priority: P0
-    status: todo
+    status: done
     depends_on:
       - NS-01
       - NS-02
@@ -97,7 +97,7 @@ tasks:
   - id: NS-04
     title: Mission candidate view and status page
     priority: P0
-    status: todo
+    status: done
     depends_on:
       - NS-03
     spec_refs:
@@ -122,7 +122,7 @@ tasks:
   - id: NS-05
     title: Voice approval adapter and webhook/manual fallback
     priority: P0
-    status: todo
+    status: done
     depends_on:
       - NS-03
       - NS-04
@@ -151,7 +151,7 @@ tasks:
   - id: NS-06
     title: Script-based runner skeleton with fake state transitions
     priority: P1
-    status: todo
+    status: done
     depends_on:
       - NS-01
       - NS-04
@@ -176,7 +176,7 @@ tasks:
   - id: NS-07
     title: Real repository checkout and mission branch creation
     priority: P1
-    status: todo
+    status: done
     depends_on:
       - NS-06
     spec_refs:
@@ -200,7 +200,7 @@ tasks:
   - id: NS-08
     title: Codex / OMX execution wrapper
     priority: P1
-    status: todo
+    status: done
     depends_on:
       - NS-07
     spec_refs:
@@ -224,7 +224,7 @@ tasks:
   - id: NS-09
     title: Test, lint, and requirement evaluation gates
     priority: P1
-    status: todo
+    status: done
     depends_on:
       - NS-08
     spec_refs:
@@ -249,7 +249,7 @@ tasks:
   - id: NS-10
     title: Bounded retry loop
     priority: P1
-    status: todo
+    status: done
     depends_on:
       - NS-09
     spec_refs:
@@ -273,7 +273,7 @@ tasks:
   - id: NS-11
     title: Commit, push, and pull request creation
     priority: P1
-    status: todo
+    status: done
     depends_on:
       - NS-10
     spec_refs:
@@ -297,7 +297,7 @@ tasks:
   - id: NS-12
     title: Logs, trace links, requirement polish, and demo hardening
     priority: P2
-    status: todo
+    status: done
     depends_on:
       - NS-11
     spec_refs:

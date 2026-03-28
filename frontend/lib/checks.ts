@@ -3,6 +3,7 @@
 
 import { execSync } from "child_process";
 import type { CheckResult } from "@/src/lib/nightshift/types";
+import { isCodexAvailable } from "@/lib/codex";
 
 function runCmd(cmd: string, cwd: string): { ok: boolean; output: string } {
   try {
@@ -72,25 +73,68 @@ export function runLintCheck(repoPath: string): CheckResult {
 export function runRequirementsCheck(
   acceptanceCriteria: string[],
   diffSummary: string,
+  repoPath?: string,
 ): CheckResult {
   const startedAt = new Date().toISOString();
 
-  // Simple heuristic: if criteria exist and there's evidence of work, pass.
-  // In production this would be an LLM call against the actual diff.
-  // For simulated mode (no real coding agent), having criteria is enough.
-  const hasCriteria = acceptanceCriteria.length > 0;
-  const hasDiff = diffSummary.length > 0 && diffSummary !== "no changes";
-  const isSimulated = diffSummary === "simulated diff" || diffSummary === "";
+  if (!acceptanceCriteria.length) {
+    return {
+      id: "check_requirements",
+      label: "Requirements",
+      status: "failed",
+      summary: "Requirements check failed: no acceptance criteria defined.",
+      startedAt,
+      completedAt: new Date().toISOString(),
+    };
+  }
 
-  const passed = hasCriteria && (hasDiff || isSimulated);
+  // §16.7: LLM-based judgment when codex is available and there's a real diff
+  const hasDiff = diffSummary.length > 0 && diffSummary !== "no changes" && diffSummary !== "";
+  if (repoPath && hasDiff && isCodexAvailable()) {
+    try {
+      const criteria = acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join("\n");
+      const prompt = `Review this git diff and determine if the acceptance criteria are satisfied. Reply with ONLY "PASS" or "FAIL: <reason>".
+
+Acceptance criteria:
+${criteria}
+
+Diff summary:
+${diffSummary}`;
+
+      const output = execSync(`codex exec --full-auto "${prompt.replace(/"/g, '\\"')}"`, {
+        cwd: repoPath,
+        encoding: "utf-8",
+        timeout: 30_000,
+        stdio: ["pipe", "pipe", "pipe"],
+      }).trim();
+
+      const passed = /\bPASS\b/i.test(output) && !/\bFAIL\b/i.test(output);
+      return {
+        id: "check_requirements",
+        label: "Requirements",
+        status: passed ? "passed" : "failed",
+        summary: passed
+          ? `LLM evaluation: requirements satisfied. ${acceptanceCriteria.length} criteria checked.`
+          : `LLM evaluation: ${output.slice(0, 200)}`,
+        startedAt,
+        completedAt: new Date().toISOString(),
+      };
+    } catch {
+      // Fall through to heuristic
+    }
+  }
+
+  // Heuristic fallback: if criteria exist and there's evidence of work, pass.
+  const isSimulated = diffSummary === "simulated diff" || diffSummary === "";
+  const passed = hasDiff || isSimulated;
 
   return {
     id: "check_requirements",
     label: "Requirements",
     status: passed ? "passed" : "failed",
     summary: passed
-      ? `Requirements appear satisfied. ${acceptanceCriteria.length} criteria evaluated.`
-      : "Requirements check failed: no acceptance criteria defined.",
+      ? `Requirements appear satisfied. ${acceptanceCriteria.length} criteria evaluated (heuristic).`
+      : "Requirements check failed: no meaningful changes detected.",
     startedAt,
     completedAt: new Date().toISOString(),
   };

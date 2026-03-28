@@ -21,9 +21,10 @@ export async function runCodex(
     summary: string;
     acceptanceCriteria: string[];
   },
+  failureContext?: string | null,
   timeoutMs = 180_000, // 3 minutes
 ): Promise<CodexResult> {
-  const prompt = buildPrompt(mission);
+  const prompt = buildPrompt(mission, failureContext);
   const events: string[] = [];
   let output = "";
 
@@ -92,13 +93,16 @@ export function isCodexAvailable(): boolean {
   }
 }
 
-function buildPrompt(mission: {
-  issueNumber: number;
-  issueTitle: string;
-  summary: string;
-  acceptanceCriteria: string[];
-}): string {
-  return `You are solving GitHub issue #${mission.issueNumber}: "${mission.issueTitle}"
+function buildPrompt(
+  mission: {
+    issueNumber: number;
+    issueTitle: string;
+    summary: string;
+    acceptanceCriteria: string[];
+  },
+  failureContext?: string | null,
+): string {
+  let prompt = `You are solving GitHub issue #${mission.issueNumber}: "${mission.issueTitle}"
 
 ## Mission Summary
 ${mission.summary}
@@ -112,4 +116,15 @@ ${mission.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join("\n")}
 - Run existing tests if available. Fix any you break.
 - Do not modify CI/CD configuration or unrelated files.
 - Commit your changes when done.`;
+
+  if (failureContext) {
+    prompt += `
+
+## Previous Attempt Failed
+The previous coding pass failed checks. Fix the issues below before proceeding:
+
+${failureContext}`;
+  }
+
+  return prompt;
 }
