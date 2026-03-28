@@ -11,6 +11,7 @@ import {
 } from "@/src/lib/nightshift/store";
 import { createBranch, commitChanges, pushBranch, createPullRequest, getDiffSummary } from "@/lib/git";
 import { runTestsCheck, runLintCheck, runRequirementsCheck } from "@/lib/checks";
+import { runCodex, isCodexAvailable } from "@/lib/codex";
 import { REPO_CONFIG } from "@/lib/config";
 
 const MAX_RUN_DURATION_MS = 5 * 60 * 1000; // §21: cap run duration
@@ -79,16 +80,25 @@ export async function runMission(missionId: string) {
         message: attempt === 0 ? "Initial coding pass started." : `Retry ${attempt}: coding with failure context.`,
       });
 
-      await new Promise((r) => setTimeout(r, 2000));
+      // Execute coding agent (Codex CLI or simulated fallback)
+      if (repoPath && isCodexAvailable()) {
+        const codexResult = await runCodex(repoPath, {
+          issueNumber: mission.issue.number,
+          issueTitle: mission.issue.title,
+          summary: mission.summary,
+          acceptanceCriteria: mission.acceptanceCriteria,
+        });
 
-      await appendMissionEvent(missionId, {
-        actor: "runner",
-        type: "file_changes_completed",
-        state: "coding",
-        message: "File changes completed.",
-      });
+        await appendMissionEvent(missionId, {
+          actor: "runner",
+          type: "file_changes_completed",
+          state: "coding",
+          message: codexResult.success
+            ? `Codex completed successfully. ${codexResult.events.length} events.`
+            : `Codex finished with errors: ${codexResult.output.slice(-200)}`,
+        });
 
-      if (repoPath) {
+        // Commit any changes codex made
         try {
           const sha = commitChanges(`nightshift: implement issue #${mission.issue.number}\n\n${mission.summary}`);
           await appendMissionEvent(missionId, {
@@ -98,8 +108,20 @@ export async function runMission(missionId: string) {
             message: `Commit created: ${sha}`,
           });
         } catch {
-          // No changes to commit
+          // Codex may have already committed, or no changes
         }
+      } else {
+        // Simulated mode — no real coding agent available
+        await new Promise((r) => setTimeout(r, 2000));
+
+        await appendMissionEvent(missionId, {
+          actor: "runner",
+          type: "file_changes_completed",
+          state: "coding",
+          message: repoPath
+            ? "File changes completed (simulated — codex not available)."
+            : "File changes completed (simulated — no repo path).",
+        });
       }
 
       checkTimeout();
