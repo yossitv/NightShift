@@ -14,29 +14,27 @@ export async function requestVoiceApproval(
   // Attempt Bland AI call if credentials are available
   if (REPO_CONFIG.blandApiKey && payload.phoneNumber) {
     try {
+      const blandPayload = {
+          phone_number: payload.phoneNumber,
+          task: `You are Night Shift. A high-risk mission needs your approval: ${payload.issueTitle}. ${payload.riskNote.replace(/\\/g, '')}. Do you approve? Say yes or no.`,
+          voice: "mason",
+          wait_for_greeting: true,
+          max_duration: 60,
+          ...(payload.webhookUrl && !payload.webhookUrl.includes("localhost") ? { webhook: payload.webhookUrl } : {}),
+          metadata: {
+            missionId: payload.missionId,
+            issueNumber: String(payload.issueNumber),
+          },
+        };
+      console.log("Bland API payload:", JSON.stringify(blandPayload, null, 2));
+
       const res = await fetch("https://api.bland.ai/v1/calls", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: REPO_CONFIG.blandApiKey,
+          authorization: REPO_CONFIG.blandApiKey,
         },
-        body: JSON.stringify({
-          phone_number: payload.phoneNumber,
-          task: `You are Night Shift, an autonomous coding assistant. A high-risk mission needs approval.
-The issue is: ${payload.issueTitle}.
-Summary: ${payload.summary}.
-Risk reason: ${payload.riskNote}.
-Ask the user: Do you approve this mission? They can say yes to approve, no to decline, or later to defer.
-Keep it brief and clear.`,
-          voice: "mason",
-          wait_for_greeting: true,
-          max_duration: 60,
-          webhook: payload.webhookUrl ?? null,
-          metadata: {
-            missionId: payload.missionId,
-            issueNumber: payload.issueNumber,
-          },
-        }),
+        body: JSON.stringify(blandPayload),
       });
 
       const data = (await res.json()) as { call_id?: string; status?: string; message?: string };

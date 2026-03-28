@@ -14,7 +14,7 @@ import { runTestsCheck, runLintCheck, runRequirementsCheck } from "@/lib/checks"
 import { runCodex, isCodexAvailable } from "@/lib/codex";
 import { REPO_CONFIG } from "@/lib/config";
 
-const MAX_RUN_DURATION_MS = 5 * 60 * 1000; // §21: cap run duration
+const MAX_RUN_DURATION_MS = 15 * 60 * 1000; // §21: cap run duration (15 min for Codex execution)
 
 export async function runMission(missionId: string) {
   const mission = await getMission(missionId);
