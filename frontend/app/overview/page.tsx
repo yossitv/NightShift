@@ -3,7 +3,7 @@ import { readMissionStore } from "@/src/lib/nightshift/store";
 import { REPO_CONFIG } from "@/lib/config";
 import { isCodexAvailable } from "@/lib/codex";
 import type { Mission, MissionEvent } from "@/src/lib/nightshift/types";
-import { IssueSelectButton } from "../components/MissionActions";
+import { IssueSelectButton, AutoRefresh } from "../components/MissionActions";
 import { execSync } from "child_process";
 import { join } from "path";
 import { existsSync } from "fs";
@@ -123,6 +123,7 @@ export default async function OverviewPage() {
 
   return (
     <main className="min-h-screen px-3 py-3 sm:px-4">
+      <AutoRefresh interval={5000} />
       <div className="mx-auto max-w-[1400px] space-y-4">
 
         {/* ── Nav ── */}
