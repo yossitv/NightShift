@@ -28,8 +28,8 @@ function buildEventId(missionId: string, type: MissionEvent["type"], createdAt: 
   return `${missionId}_${type}_${createdAt.replace(/[:.]/g, "-")}`;
 }
 
-function inferInitialState(riskLevel: Mission["riskLevel"]): MissionState {
-  return riskLevel === "high" ? "awaiting_approval" : "queued";
+function inferInitialState(): MissionState {
+  return "candidate_selected";
 }
 
 function buildApproval(riskLevel: Mission["riskLevel"], createdAt: string): Mission["approval"] {
@@ -185,7 +185,7 @@ export async function createMission(input: CreateMissionInput) {
   const snapshot = await readSnapshot();
   const createdAt = nowIso();
   const missionId = buildMissionId(input.issue.number);
-  const state = inferInitialState(input.riskLevel);
+  const state = inferInitialState();
 
   const mission: Mission = {
     id: missionId,

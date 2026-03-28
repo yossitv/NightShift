@@ -30,6 +30,17 @@ export const MISSION_EVENT_TYPES = [
   "approval_resolved",
   "check_updated",
   "note_logged",
+  "planning_started",
+  "plan_written",
+  "coding_started",
+  "checks_started",
+  "check_passed",
+  "check_failed",
+  "retry_started",
+  "commit_created",
+  "branch_pushed",
+  "pr_opened",
+  "mission_failed",
 ] as const;
 export type MissionEventType = (typeof MISSION_EVENT_TYPES)[number];
 

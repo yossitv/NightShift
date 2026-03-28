@@ -15,18 +15,28 @@ import { REPO_CONFIG } from "@/lib/config";
 
 export const dynamic = "force-dynamic";
 
+const MAX_RUN_DURATION_MS = 5 * 60 * 1000; // 5 minutes (SPEC §21)
+
 // ── Runner core ─────────────────────────────────────────────
 
 async function runMission(missionId: string) {
-  let mission = await getMission(missionId);
+  const mission = await getMission(missionId);
   if (!mission) return;
+
+  const deadline = Date.now() + MAX_RUN_DURATION_MS;
+
+  function checkTimeout() {
+    if (Date.now() > deadline) {
+      throw new Error("Mission exceeded maximum run duration (5 minutes).");
+    }
+  }
 
   try {
     // ── 1. Planning ──
     await updateMissionState(missionId, "planning", "Mission planning started.");
     await appendMissionEvent(missionId, {
       actor: "runner",
-      type: "note_logged",
+      type: "planning_started",
       state: "planning",
       message: `Planning implementation for issue #${mission.issue.number}: ${mission.issue.title}`,
     });
@@ -38,12 +48,11 @@ async function runMission(missionId: string) {
       repoPath = createBranch(branchName);
       await appendMissionEvent(missionId, {
         actor: "runner",
-        type: "note_logged",
+        type: "branch_pushed",
         state: "planning",
-        message: `Branch ${branchName} created in ${repoPath}.`,
+        message: `Branch ${branchName} created.`,
       });
     } catch (err: unknown) {
-      // If git ops fail (no token, permissions, etc.) continue with simulated mode
       repoPath = "";
       await appendMissionEvent(missionId, {
         actor: "runner",
@@ -55,20 +64,24 @@ async function runMission(missionId: string) {
 
     await appendMissionEvent(missionId, {
       actor: "runner",
-      type: "state_changed",
+      type: "plan_written",
       state: "planning",
       message: `Plan written. Acceptance criteria: ${mission.acceptanceCriteria.join("; ")}`,
     });
 
+    checkTimeout();
+
     // ── 2. Coding loop (with retry) ──
-    const maxRetries = mission.retryCount > 0 ? 3 - mission.retryCount : 3;
+    const maxRetries = 3;
 
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      checkTimeout();
+
       // Coding phase
       await updateMissionState(missionId, "coding", `Coding pass ${attempt + 1} started.`);
       await appendMissionEvent(missionId, {
         actor: "runner",
-        type: "state_changed",
+        type: "coding_started",
         state: "coding",
         message: attempt === 0
           ? "Initial coding pass started."
@@ -91,17 +104,25 @@ async function runMission(missionId: string) {
           const sha = commitChanges(`nightshift: implement issue #${mission.issue.number}\n\n${mission.summary}`);
           await appendMissionEvent(missionId, {
             actor: "runner",
-            type: "note_logged",
+            type: "commit_created",
             state: "coding",
             message: `Commit created: ${sha}`,
           });
         } catch {
-          // No changes to commit — that's ok for simulated mode
+          // No changes to commit
         }
       }
 
+      checkTimeout();
+
       // ── 3. Testing ──
       await updateMissionState(missionId, "testing", "Running checks...");
+      await appendMissionEvent(missionId, {
+        actor: "runner",
+        type: "checks_started",
+        state: "testing",
+        message: "Running tests, lint, and requirements checks.",
+      });
 
       // Run checks
       const testsResult = repoPath
@@ -119,15 +140,19 @@ async function runMission(missionId: string) {
       await upsertMissionCheck(missionId, lintResult);
       await upsertMissionCheck(missionId, reqResult);
 
+      // Emit individual check events
+      for (const check of [testsResult, lintResult, reqResult]) {
+        await appendMissionEvent(missionId, {
+          actor: "runner",
+          type: check.status === "passed" ? "check_passed" : "check_failed",
+          state: "testing",
+          message: `${check.label}: ${check.status} — ${check.summary}`,
+        });
+      }
+
       const allPassed = testsResult.status === "passed" && lintResult.status === "passed" && reqResult.status === "passed";
 
       if (allPassed) {
-        await appendMissionEvent(missionId, {
-          actor: "runner",
-          type: "note_logged",
-          state: "testing",
-          message: "All checks passed.",
-        });
         break;
       }
 
@@ -142,9 +167,9 @@ async function runMission(missionId: string) {
         await updateMissionState(missionId, "retrying", `Checks failed (${failedNames}). Retrying...`);
         await appendMissionEvent(missionId, {
           actor: "runner",
-          type: "state_changed",
+          type: "retry_started",
           state: "retrying",
-          message: `Retry ${attempt + 1}/${maxRetries}: ${failedNames} failed. Retrying with failure context.`,
+          message: `Retry ${attempt + 1}/${maxRetries}: ${failedNames} failed.`,
         });
         await new Promise((r) => setTimeout(r, 1000));
         continue;
@@ -154,22 +179,23 @@ async function runMission(missionId: string) {
       await updateMissionState(missionId, "failed", `Checks failed after ${attempt + 1} attempts: ${failedNames}`);
       await appendMissionEvent(missionId, {
         actor: "runner",
-        type: "state_changed",
+        type: "mission_failed",
         state: "failed",
         message: `Mission failed: retry budget exhausted. Failed checks: ${failedNames}`,
       });
       return;
     }
 
+    checkTimeout();
+
     // ── 4. Push & PR ──
     let prUrl = "";
     if (repoPath) {
-      const branchName = mission.branch.name ?? `${REPO_CONFIG.branchPrefix}${missionId}`;
       try {
         pushBranch(branchName);
         await appendMissionEvent(missionId, {
           actor: "runner",
-          type: "note_logged",
+          type: "branch_pushed",
           state: "testing",
           message: `Branch ${branchName} pushed to origin.`,
         });
@@ -197,7 +223,7 @@ async function runMission(missionId: string) {
     await updateMissionState(missionId, "pr_opened", `Pull request created: ${prUrl}`);
     await appendMissionEvent(missionId, {
       actor: "runner",
-      type: "state_changed",
+      type: "pr_opened",
       state: "pr_opened",
       message: `Mission complete. PR: ${prUrl}`,
       metadata: { prUrl },
@@ -208,9 +234,9 @@ async function runMission(missionId: string) {
     await updateMissionState(missionId, "failed", `Mission failed: ${message}`);
     await appendMissionEvent(missionId, {
       actor: "runner",
-      type: "state_changed",
+      type: "mission_failed",
       state: "failed",
-      message: `Unhandled runner error: ${message}`,
+      message: `Runner error: ${message}`,
     });
   }
 }
@@ -234,13 +260,6 @@ export async function POST(
       { status: 400 }
     );
   }
-
-  await appendMissionEvent(missionId, {
-    actor: "system",
-    type: "state_changed",
-    state: "queued",
-    message: "Runner started.",
-  });
 
   // Fire and forget
   runMission(missionId).catch((err) => {

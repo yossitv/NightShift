@@ -1,6 +1,6 @@
-// POST /api/webhooks/bland — Bland AI voice approval callback (SPEC.md §19)
+// POST /api/webhooks/bland — Bland AI voice approval callback (SPEC.md §14, §19)
 
-import { getMission, updateMissionState } from "@/src/lib/nightshift/store";
+import { getMission, updateMissionState, appendMissionEvent } from "@/src/lib/nightshift/store";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +21,7 @@ export async function POST(req: Request) {
     return Response.json({ ok: true, message: "Mission no longer awaiting approval" });
   }
 
-  // Parse Bland AI transcript for approval/decline keywords
+  // Parse Bland AI transcript for approval/decline/defer keywords
   const transcript = (body?.concatenated_transcript ?? body?.transcript ?? "").toLowerCase();
   let decision: "approved" | "declined" | "deferred" = "deferred";
 
@@ -29,12 +29,23 @@ export async function POST(req: Request) {
     decision = "approved";
   } else if (/\b(no|decline|reject|stop|cancel)\b/.test(transcript)) {
     decision = "declined";
+  } else if (/\b(later|defer|hold|wait|not now)\b/.test(transcript)) {
+    decision = "deferred";
   }
 
   if (decision === "approved") {
     await updateMissionState(missionId, "queued", "Mission approved via voice call.");
   } else if (decision === "declined") {
     await updateMissionState(missionId, "declined", "Mission declined via voice call.");
+  } else {
+    // Deferred: stay in awaiting_approval, log the deferral
+    await appendMissionEvent(missionId, {
+      actor: "approval_adapter",
+      type: "note_logged",
+      state: "awaiting_approval",
+      message: "Voice call deferred — mission stays in awaiting_approval. Manual approval available.",
+      metadata: { callId: body?.call_id, transcript: transcript.slice(0, 200) },
+    });
   }
 
   return Response.json({ ok: true, decision });

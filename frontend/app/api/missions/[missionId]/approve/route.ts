@@ -13,7 +13,7 @@ export async function POST(
   if (!mission) {
     return Response.json({ error: "Mission not found" }, { status: 404 });
   }
-  if (mission.state !== "awaiting_approval") {
+  if (mission.state !== "awaiting_approval" && mission.state !== "candidate_selected") {
     return Response.json(
       { error: `Cannot approve mission in state: ${mission.state}` },
       { status: 400 }

@@ -1,7 +1,7 @@
 // POST /api/missions/select — Auto-select issue and create mission (SPEC.md §19)
 
 import { REPO_CONFIG } from "@/lib/config";
-import { createMission, listMissions } from "@/src/lib/nightshift/store";
+import { createMission, listMissions, getMission, updateMissionState } from "@/src/lib/nightshift/store";
 import { selectIssue } from "@/lib/selector";
 import { requestVoiceApproval } from "@/lib/voice";
 import type { GitHubIssue } from "@/lib/types";
@@ -77,8 +77,14 @@ export async function POST() {
     branchName,
   });
 
-  // Trigger voice approval for high-risk missions
+  // Transition from candidate_selected based on risk (SPEC §10)
   if (riskLevel === "high") {
+    await updateMissionState(
+      mission.id,
+      "awaiting_approval",
+      `High-risk mission requires approval. ${riskNote}`
+    );
+
     const voiceResult = await requestVoiceApproval({
       missionId: mission.id,
       issueNumber: issue.number,
@@ -91,13 +97,21 @@ export async function POST() {
     });
 
     console.log("Voice approval result:", voiceResult);
+  } else {
+    await updateMissionState(
+      mission.id,
+      "queued",
+      "Low-risk mission auto-queued."
+    );
   }
+
+  const updated = await getMission(mission.id);
 
   return Response.json({
     missionId: mission.id,
     issueNumber: issue.number,
-    riskLevel: mission.riskLevel,
-    status: mission.state,
+    riskLevel: updated?.riskLevel ?? riskLevel,
+    status: updated?.state ?? "candidate_selected",
     selectionReason,
     summary,
   });
