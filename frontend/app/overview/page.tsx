@@ -191,7 +191,7 @@ export default async function OverviewPage() {
                         <Link href={`/missions/${mission.id}`} className="font-mono text-[0.6rem] text-[#634BFF] hover:text-white">{mission.id}</Link>
                       </div>
                     ) : (
-                      issue.state === "open" && <IssueSelectButton issueNumber={issue.number} />
+                      issue.state === "open" && <IssueSelectButton issueNumber={issue.number} disabled={active > 0} />
                     )}
                   </div>
                 );
