@@ -112,11 +112,22 @@ ${mission.issueBody ? `\n## Full Issue Description\n${mission.issueBody}\n` : ""
 ## Acceptance Criteria
 ${mission.acceptanceCriteria.map((c, i) => `${i + 1}. ${c}`).join("\n")}
 
+## Project Structure
+The application code is in the demo-app/ directory:
+- demo-app/src/index.js — HTTP server entry point
+- demo-app/src/router.js — route handler
+- demo-app/src/auth.js — authentication and token management
+- demo-app/src/signup.js — user registration
+- demo-app/src/db.js — in-memory database
+- demo-app/src/users.js, sessions.js, records.js, settings.js, dashboard.js — API handlers
+- demo-app/tests/run.js — test suite
+
 ## Rules
-- Only solve the described issue. Do not expand scope.
+- Modify files in demo-app/src/ to solve the issue.
+- Add tests in demo-app/tests/run.js for your changes.
+- Run \`cd demo-app && npm test\` to verify tests pass.
 - Keep diffs small and reviewable.
-- Run existing tests if available. Fix any you break.
-- Do not modify CI/CD configuration or unrelated files.
+- Do not modify files outside demo-app/.
 - Commit your changes when done.`;
 
   if (failureContext) {
