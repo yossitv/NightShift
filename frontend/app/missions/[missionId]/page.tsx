@@ -80,15 +80,16 @@ export default async function MissionPage({ params }: { params: Promise<{ missio
   const events = (await listMissionEvents(mission.id)).slice(0, 12);
   const passedChecks = mission.checks.filter((c) => c.status === "passed").length;
 
-  // Fetch diff if branch exists
+  // Fetch diff if branch exists (no checkout — use branch ref directly)
   let diffData: { stat: string; diff: string; commits: string } | null = null;
   const repoPath = join(process.cwd(), ".data", "repos", `${REPO_CONFIG.owner}_${REPO_CONFIG.name}`);
   if (mission.branch.name && existsSync(join(repoPath, ".git"))) {
     try {
-      execSync(`git checkout ${mission.branch.name} 2>/dev/null || true`, { cwd: repoPath, timeout: 5000 });
-      const stat = execSync("git diff --stat origin/main...HEAD 2>/dev/null || echo ''", { cwd: repoPath, encoding: "utf-8", timeout: 5000 }).trim();
-      const diff = execSync("git diff origin/main...HEAD 2>/dev/null || echo ''", { cwd: repoPath, encoding: "utf-8", timeout: 5000 }).trim();
-      const commits = execSync("git log --oneline origin/main...HEAD 2>/dev/null || echo ''", { cwd: repoPath, encoding: "utf-8", timeout: 5000 }).trim();
+      const branch = mission.branch.name;
+      const run = (cmd: string) => execSync(cmd, { cwd: repoPath, encoding: "utf-8", timeout: 5000 }).trim();
+      const stat = run(`git diff --stat origin/main...${branch} 2>/dev/null || echo ''`);
+      const diff = run(`git diff origin/main...${branch} 2>/dev/null || echo ''`);
+      const commits = run(`git log --oneline origin/main...${branch} 2>/dev/null || echo ''`);
       if (stat || diff) diffData = { stat, diff: diff.slice(0, 30000), commits };
     } catch { /* ignore */ }
   }

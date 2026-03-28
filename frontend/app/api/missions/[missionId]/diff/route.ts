@@ -29,39 +29,26 @@ export async function GET(
   }
 
   try {
-    // Checkout the branch
-    execSync(`git checkout ${branchName} 2>/dev/null || true`, { cwd: repoPath, encoding: "utf-8", timeout: 10000 });
+    // Use branch ref directly — no checkout needed
+    const run = (cmd: string) => execSync(cmd, { cwd: repoPath, encoding: "utf-8", timeout: 10000 }).trim();
 
-    // Get diff stat
-    let stat: string;
-    try {
-      stat = execSync("git diff --stat origin/main...HEAD", { cwd: repoPath, encoding: "utf-8", timeout: 10000 }).trim();
-    } catch {
-      stat = execSync("git diff --stat HEAD~1 2>/dev/null || echo 'No diff available'", { cwd: repoPath, encoding: "utf-8", timeout: 10000 }).trim();
-    }
+    run("git fetch origin 2>/dev/null || true");
 
-    // Get full diff
-    let diff: string;
-    try {
-      diff = execSync("git diff origin/main...HEAD", { cwd: repoPath, encoding: "utf-8", timeout: 10000 }).trim();
-    } catch {
-      diff = execSync("git diff HEAD~1 2>/dev/null || echo ''", { cwd: repoPath, encoding: "utf-8", timeout: 10000 }).trim();
-    }
+    let stat = "";
+    try { stat = run(`git diff --stat origin/main...${branchName}`); } catch { /* */ }
 
-    // Get commit log
-    let commits: string;
-    try {
-      commits = execSync("git log --oneline origin/main...HEAD", { cwd: repoPath, encoding: "utf-8", timeout: 10000 }).trim();
-    } catch {
-      commits = execSync("git log --oneline -5", { cwd: repoPath, encoding: "utf-8", timeout: 10000 }).trim();
-    }
+    let diff = "";
+    try { diff = run(`git diff origin/main...${branchName}`); } catch { /* */ }
+
+    let commits = "";
+    try { commits = run(`git log --oneline origin/main...${branchName}`); } catch { /* */ }
 
     return Response.json({
       branch: branchName,
       stat,
-      diff: diff.slice(0, 50000), // Cap at 50KB
+      diff: diff.slice(0, 50000),
       commits,
-      files: stat.split("\n").length - 1,
+      files: stat ? stat.split("\n").length - 1 : 0,
     });
   } catch (err: unknown) {
     return Response.json({

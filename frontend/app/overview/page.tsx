@@ -67,10 +67,11 @@ function getDiffForBranch(branchName: string | null): { stat: string; diff: stri
   const repoPath = join(process.cwd(), ".data", "repos", `${REPO_CONFIG.owner}_${REPO_CONFIG.name}`);
   if (!existsSync(join(repoPath, ".git"))) return null;
   try {
-    execSync(`git checkout ${branchName} 2>/dev/null || true`, { cwd: repoPath, timeout: 5000 });
-    const stat = execSync("git diff --stat origin/main...HEAD 2>/dev/null || echo ''", { cwd: repoPath, encoding: "utf-8", timeout: 5000 }).trim();
-    const diff = execSync("git diff origin/main...HEAD 2>/dev/null || echo ''", { cwd: repoPath, encoding: "utf-8", timeout: 5000 }).trim();
-    const commits = execSync("git log --oneline origin/main...HEAD 2>/dev/null || echo ''", { cwd: repoPath, encoding: "utf-8", timeout: 5000 }).trim();
+    // Fetch to ensure we have the branch refs, but don't checkout (avoids race conditions)
+    execSync("git fetch origin 2>/dev/null || true", { cwd: repoPath, timeout: 10000 });
+    const stat = execSync(`git diff --stat origin/main...${branchName} 2>/dev/null || echo ''`, { cwd: repoPath, encoding: "utf-8", timeout: 5000 }).trim();
+    const diff = execSync(`git diff origin/main...${branchName} 2>/dev/null || echo ''`, { cwd: repoPath, encoding: "utf-8", timeout: 5000 }).trim();
+    const commits = execSync(`git log --oneline origin/main...${branchName} 2>/dev/null || echo ''`, { cwd: repoPath, encoding: "utf-8", timeout: 5000 }).trim();
     if (stat || diff) return { stat, diff: diff.slice(0, 15000), commits };
   } catch { /* ignore */ }
   return null;
@@ -247,9 +248,9 @@ export default async function OverviewPage() {
 
                     {/* Diff stat (inline) */}
                     {diff && diff.stat && (
-                      <details className="mt-2">
+                      <details className="mt-2" open>
                         <summary className="cursor-pointer font-mono text-[0.65rem] text-cyan-200/60 hover:text-cyan-200">
-                          {diff.commits.split("\n").length} commit(s), {diff.stat.split("\n").length - 1} file(s) changed — click to view diff
+                          {diff.commits.split("\n").length} commit(s), {diff.stat.split("\n").length - 1} file(s) changed
                         </summary>
                         <div className="mt-2 rounded-xl border border-white/8 bg-black/40 p-3">
                           {diff.commits && (
