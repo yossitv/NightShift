@@ -2,7 +2,6 @@
 // Invokes `codex exec --full-auto` to solve an issue in a given repo.
 
 import { execSync, spawn } from "child_process";
-import type { Mission } from "@/src/lib/nightshift/types";
 
 export type CodexResult = {
   success: boolean;
