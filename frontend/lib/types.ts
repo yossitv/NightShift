@@ -1,70 +1,7 @@
-// Night Shift MVP — Core data model (SPEC.md §18)
+// Night Shift MVP — Shared types used by lib/ modules
+// The canonical Mission type lives in src/lib/nightshift/types.ts
 
 export type RiskLevel = "low" | "high";
-
-export type ApprovalStatus =
-  | "not_required"
-  | "pending"
-  | "approved"
-  | "declined"
-  | "deferred";
-
-export type MissionStatus =
-  | "candidate_selected"
-  | "awaiting_approval"
-  | "queued"
-  | "planning"
-  | "coding"
-  | "testing"
-  | "retrying"
-  | "pr_opened"
-  | "failed"
-  | "canceled"
-  | "declined";
-
-export type Mission = {
-  id: string;
-  repoOwner: string;
-  repoName: string;
-  issueNumber: number;
-  issueUrl: string;
-  issueTitle: string;
-  issueBody: string;
-  selectionReason: string | null;
-  riskLevel: RiskLevel;
-  approvalStatus: ApprovalStatus;
-  status: MissionStatus;
-  summary: string | null;
-  acceptanceCriteria: string[];
-  nonGoals: string[];
-  branchName: string | null;
-  prUrl: string | null;
-  traceUrl: string | null;
-  logUrl: string | null;
-  retryCount: number;
-  maxRetries: number;
-  lastError: string | null;
-  createdAt: string;
-  updatedAt: string;
-};
-
-export type MissionEvent = {
-  id: string;
-  missionId: string;
-  type: string;
-  message: string;
-  metadata: Record<string, unknown>;
-  createdAt: string;
-};
-
-export type CheckResult = {
-  missionId: string;
-  name: "tests" | "lint" | "requirements";
-  status: "pending" | "passed" | "failed";
-  summary: string;
-  rawOutput: string | null;
-  createdAt: string;
-};
 
 // GitHub issue shape used by the selector
 export type GitHubIssue = {

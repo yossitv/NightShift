@@ -110,6 +110,19 @@ export async function POST() {
       "queued",
       "Low-risk mission auto-queued."
     );
+
+    // §8.1 step 5: Low-risk missions start automatically
+    try {
+      const startRes = await fetch(
+        `${process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000"}/api/missions/${mission.id}/start`,
+        { method: "POST" }
+      );
+      if (!startRes.ok) {
+        console.log("Auto-start note:", await startRes.text());
+      }
+    } catch (err) {
+      console.log("Auto-start skipped:", err);
+    }
   }
 
   const updated = await getMission(mission.id);

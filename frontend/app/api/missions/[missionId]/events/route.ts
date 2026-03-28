@@ -1,4 +1,4 @@
-// GET /api/missions/:missionId/events — Mission events (SPEC.md §19)
+// GET /api/missions/:missionId/events — Mission events in chronological order (SPEC.md §19)
 
 import { listMissionEvents } from "@/src/lib/nightshift/store";
 
@@ -10,5 +10,7 @@ export async function GET(
 ) {
   const { missionId } = await params;
   const events = await listMissionEvents(missionId);
-  return Response.json({ events });
+  // Store returns descending; SPEC §19 requires chronological (ascending)
+  const chronological = [...events].reverse();
+  return Response.json({ events: chronological });
 }
