@@ -2,6 +2,8 @@
 // Tests, lint, and LLM-based requirements evaluation.
 
 import { execSync } from "child_process";
+import { join } from "path";
+import { existsSync } from "fs";
 import type { CheckResult } from "@/src/lib/nightshift/types";
 import { isCodexAvailable } from "@/lib/codex";
 
@@ -20,23 +22,19 @@ function runCmd(cmd: string, cwd: string): { ok: boolean; output: string } {
   }
 }
 
+function findAppDir(repoPath: string): string {
+  // Prefer demo-app/ if it exists, otherwise use repo root
+  const demoApp = join(repoPath, "demo-app");
+  if (existsSync(join(demoApp, "package.json"))) return demoApp;
+  return repoPath;
+}
+
 export function runTestsCheck(repoPath: string): CheckResult {
   const now = new Date().toISOString();
   const startedAt = now;
+  const appDir = findAppDir(repoPath);
 
-  // Try common test commands
-  const testCmds = ["npm test -- --passWithNoTests 2>&1", "npm run test -- --passWithNoTests 2>&1"];
-  let result = { ok: true, output: "No test command found; passing by default." };
-
-  for (const cmd of testCmds) {
-    try {
-      execSync("npm run test --dry-run 2>&1", { cwd: repoPath, encoding: "utf-8", timeout: 5000 });
-      result = runCmd(cmd, repoPath);
-      break;
-    } catch {
-      continue;
-    }
-  }
+  const result = runCmd("npm test 2>&1", appDir);
 
   return {
     id: "check_tests",
@@ -50,12 +48,12 @@ export function runTestsCheck(repoPath: string): CheckResult {
 
 export function runLintCheck(repoPath: string): CheckResult {
   const startedAt = new Date().toISOString();
+  const appDir = findAppDir(repoPath);
 
-  // Try lint, then typecheck
   let lintResult = { ok: true, output: "No lint command configured; passing." };
   try {
-    execSync("npm run lint --dry-run 2>&1", { cwd: repoPath, encoding: "utf-8", timeout: 5000 });
-    lintResult = runCmd("npm run lint 2>&1", repoPath);
+    execSync("npm run lint --dry-run 2>&1", { cwd: appDir, encoding: "utf-8", timeout: 5000 });
+    lintResult = runCmd("npm run lint 2>&1", appDir);
   } catch {
     // no lint script
   }
